@@ -1,0 +1,7 @@
+# Built and generated on each machine
+bin/
+captures/
+keys/
+appshots.log
+chrome-pending.json
+.DS_Store
