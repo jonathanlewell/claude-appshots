@@ -3,8 +3,8 @@
 // When Jonathan captures a Chrome tab with Claude Appshots, the Appshots agent
 // leaves a short note (URL, window title, time) that the native host hands
 // over on request (several captures can be waiting). Claude in Chrome can only control tabs inside its own tab
-// group, so as soon as a tab group is created or a tab joins one (which is
-// what Claude in Chrome does when it starts work), this moves the captured tab
+// group, so as soon as a tab group is created, a tab joins one or a grouped tab
+// loads (which is what Claude in Chrome does when it starts work), this moves the captured tab
 // into that group. Claude then controls the real tab, as Codex Appshots does.
 // Every capture from the last 15 minutes is moved; each is used once.
 
@@ -56,4 +56,9 @@ async function onGroupActivity(groupId) {
 
 chrome.tabGroups.onCreated.addListener((g) => onGroupActivity(g.id));
 chrome.tabs.onCreated.addListener((t) => { if (t.groupId !== NONE) onGroupActivity(t.groupId); });
-chrome.tabs.onUpdated.addListener((id, info) => { if ("groupId" in info) onGroupActivity(info.groupId); });
+// A tab joining a group, or a grouped tab starting to load (Claude navigating
+// its placeholder), both mean Claude is at work in that group.
+chrome.tabs.onUpdated.addListener((id, info, tab) => {
+  if ("groupId" in info) onGroupActivity(info.groupId);
+  else if (info.status === "loading") onGroupActivity(tab.groupId);
+});

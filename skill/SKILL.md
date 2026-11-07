@@ -64,9 +64,11 @@ group is created or a tab joins one within 15 minutes of the capture.
 
 1. Call `tabs_context_mcp` with `createIfEmpty: true`. If a tab in the group has
    the Appshot's URL, use it and skip to step 4.
-2. If the group already existed (nothing was created), call `tabs_create_mcp` once:
-   a tab joining the group is what wakes the bridge. Then wait about 2 seconds
-   (a `computer` `wait` action) and call `tabs_context_mcp` again.
+2. If the group already existed (nothing was created), wake the bridge: `navigate`
+   one of the group's placeholder tabs (New tab or example.com) to
+   `https://example.com` (`about:` and `data:` URLs are refused), or if there is
+   none, call `tabs_create_mcp` once. Then wait about 2 seconds (a
+   `computer` `wait` action) and call `tabs_context_mcp` again.
 3. Still not there? The bridge isn't installed or didn't match the page. Ask him:
    "Right-click the tab you captured → Add tab to group → the Claude group (or
    drag it onto that group's label), then tell me." If the group is in a new
@@ -74,9 +76,10 @@ group is created or a tab joins one within 15 minutes of the capture.
 4. Take a screenshot of the tab and compare it with the Appshot's screenshot to
    confirm it's the same page, then do the work.
 
-**Never close a tab Claude opened in the group (placeholder or otherwise) while
-his tab is in it.** Closing the tab Claude in Chrome is anchored to dissolves the
-whole group and his tab falls out (seen 7 November 2026). Leave them open.
+**Never close the group's first tab** (the one `createIfEmpty` made): closing it
+dissolves the whole group and his tabs fall out (seen 7 November 2026). Extra
+tabs Claude opened later can be closed safely when done (tested the same night).
+Never close his own tabs.
 
 ### Other browsers (Brave, Safari, Arc…)
 

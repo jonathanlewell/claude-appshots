@@ -35,10 +35,16 @@ const check = (name, ok) => { console.log((ok ? "ok   " : "FAIL ") + name); if (
   check("picks the active, most recent duplicate", !grouped.includes(3));
   check("falls back to the window title", grouped.includes(1));
   check("marks them done", done.join() === "1,2" && queue.length === 0);
-  grouped = []; on.updated(9, { groupId: 77 }); await tick();
+  grouped = []; on.updated(9, { groupId: 77 }, { groupId: 77 }); await tick();
   check("does nothing with an empty queue", grouped.length === 0);
-  on.updated(9, { groupId: -1 }); on.created({ groupId: -1 }); await tick();
+  on.updated(9, { groupId: -1 }, { groupId: -1 }); on.created({ groupId: -1 }); await tick();
   check("ignores tabs leaving groups", grouped.length === 0);
+  queue = [{ time: 4, url: "github.com/x", windowTitle: "" }]; tabs.find((t) => t.id === 1).groupId = -1;
+  on.updated(4, { status: "loading" }, { id: 4, groupId: 77 }); await tick();
+  check("wakes when a grouped tab loads", grouped.join() === "1");
+  grouped = []; queue = [{ time: 5, url: "github.com/x", windowTitle: "" }]; tabs.find((t) => t.id === 1).groupId = -1;
+  on.updated(9, { status: "loading" }, { id: 9, groupId: -1 }); await tick();
+  check("ignores ungrouped tabs loading", grouped.length === 0);
   queue = [{ time: 3, url: "gone.example", windowTitle: "Gone - Google Chrome" }];
   on.created({ groupId: 77 }); await tick();
   check("keeps a capture whose tab isn't open", queue.length === 1 && grouped.length === 0);
