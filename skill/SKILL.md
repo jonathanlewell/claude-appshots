@@ -59,8 +59,9 @@ He wants Claude to control **the tab he captured**, not a copy (confirmed
 7 November 2026). Never open a duplicate of the page unless he says to.
 
 The **Appshots Chrome bridge** (an extension he installs once, see the README)
-moves the captured tab into Claude's group automatically: the moment a tab
-group is created or a tab joins one within 15 minutes of the capture.
+moves every tab captured in the last 15 minutes into Claude's group the moment a
+tab group is created, a tab joins one, or a tab in a group starts loading.
+Its activity shows as `chrome-bridge:` lines in `~/.claude/appshots/appshots.log`.
 
 1. Call `tabs_context_mcp` with `createIfEmpty: true`. If a tab in the group has
    the Appshot's URL, use it and skip to step 4.
