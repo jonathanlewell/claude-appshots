@@ -7,8 +7,9 @@
 // Screen Recording permissions; a child process inherits them. Run on its own
 // from a terminal it will report that permission is missing.
 //
-// Usage: appshot-capture (--pid N | --bundle ID) [--outdir DIR] [--max-chars N]
-// Prints one JSON object to stdout.
+// Usage: appshot-capture --pid N [--outdir DIR]
+// Saves the full Codex-format Appshot (tree) and a screenshot to DIR, and
+// prints one JSON object whose "text" is the short block to paste.
 
 import AppKit
 import ApplicationServices
@@ -16,25 +17,13 @@ import ApplicationServices
 @_silgen_name("_AXUIElementGetWindow")
 func _AXUIElementGetWindow(_ element: AXUIElement, _ windowID: UnsafeMutablePointer<CGWindowID>) -> AXError
 
-// MARK: - Arguments
-
 var argPID: pid_t?
-var argBundle: String?
 var outDir = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent(".claude/appshots/captures").path
-var maxChars = 25_000
-
-do {
-    var it = CommandLine.arguments.dropFirst().makeIterator()
-    while let a = it.next() {
-        switch a {
-        case "--pid": argPID = it.next().flatMap { pid_t($0) }
-        case "--bundle": argBundle = it.next()
-        case "--outdir": if let v = it.next() { outDir = v }
-        case "--max-chars": if let v = it.next(), let n = Int(v) { maxChars = n }
-        default: break
-        }
-    }
+var args = CommandLine.arguments.dropFirst().makeIterator()
+while let a = args.next() {
+    if a == "--pid" { argPID = args.next().flatMap { pid_t($0) } }
+    if a == "--outdir", let v = args.next() { outDir = v }
 }
 
 func emit(_ obj: [String: Any]) -> Never {
@@ -46,14 +35,8 @@ func emit(_ obj: [String: Any]) -> Never {
 
 guard AXIsProcessTrusted() else { emit(["error": "accessibility-not-granted"]) }
 
-let target: NSRunningApplication? = {
-    if let p = argPID { return NSRunningApplication(processIdentifier: p) }
-    if let b = argBundle { return NSRunningApplication.runningApplications(withBundleIdentifier: b).first }
-    return NSWorkspace.shared.frontmostApplication
-}()
-guard let target else { emit(["error": "app-not-found"]) }
+guard let target = argPID.flatMap({ NSRunningApplication(processIdentifier: $0) }) else { emit(["error": "app-not-found"]) }
 
-let started = Date()
 let appName = target.localizedName ?? target.bundleIdentifier ?? "App"
 let bundleID = target.bundleIdentifier ?? ""
 let appEl = AXUIElementCreateApplication(target.processIdentifier)
@@ -262,75 +245,53 @@ if let first = tree.lines.first, !first.contains("URL: "), let u = tree.firstWeb
 
 // MARK: - Footer: selected text or focused element
 
-var footer = ""
-if let focused = attr(appEl, kAXFocusedUIElementAttribute) {
-    let f = focused as! AXUIElement
+var selection: String?
+var focusLine: String?
+if let f = attr(appEl, kAXFocusedUIElementAttribute).map({ $0 as! AXUIElement }) {
     let fa = fetch(f)
-    if !isSecure(fa), let sel = nonEmpty(attr(f, kAXSelectedTextAttribute)) {
-        footer = "Selected text: ```\n\(esc(String(sel.prefix(6_000))))\n```\n\n"
-            + "Note: The user had this text selected when they took the Appshot. If they ask about \"this\" or refer to what they are looking at, they may mean the selection, though they may also mean something else on screen."
-    } else if let line = describe(f, fa) {
-        footer = "The focused UI element is \(line)"
-    }
+    if !isSecure(fa) { selection = nonEmpty(attr(f, kAXSelectedTextAttribute)) }
+    if selection == nil { focusLine = describe(f, fa) }
 }
 
-// MARK: - Assemble, save, cap
+// MARK: - Assemble and save
 
-let stamp: String = {
-    let f = ISO8601DateFormatter()
-    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    f.timeZone = TimeZone(identifier: "UTC")
-    return f.string(from: Date()).replacingOccurrences(of: ":", with: "-")
-}()
+let stamp = ISO8601DateFormatter.string(from: Date(), timeZone: TimeZone(identifier: "UTC")!,
+                                        formatOptions: [.withInternetDateTime, .withFractionalSeconds])
+    .replacingOccurrences(of: ":", with: "-")
 let baseName = "\(appName) Appshot \(stamp)"
-try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
-let fullTreePath = (outDir as NSString).appendingPathComponent(baseName + ".txt")
+// Screen contents: readable by this user only.
+try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+chmod(outDir, 0o700)
+let treePath = (outDir as NSString).appendingPathComponent(baseName + ".txt")
 let imageName = baseName + ".png"
 let imagePath = (outDir as NSString).appendingPathComponent(imageName)
+let url = tree.firstWebURL
 
-var body = "\nWindow: \"\(esc(windowTitle))\", App: \(esc(appName)).\n" + tree.lines.joined(separator: "\n")
-if tree.hitNodeLimit { body += "\n[Tree stopped after \(maxNodes) elements.]" }
-if tree.hitTimeLimit { body += "\n[Tree stopped after 6 seconds; \(tree.nodes) elements read. The app was slow to answer.]" }
-if !footer.isEmpty { body += "\n\n" + footer }
-body += "\n"
-
-let openTag = "<appshot app=\"\(esc(appName, attribute: true))\" bundle-identifier=\"\(esc(bundleID, attribute: true))\" window-title=\"\(esc(windowTitle, attribute: true))\" image=\"\(esc(imageName, attribute: true))\">"
-let fullBlock = openTag + body + "</appshot>"
-try? fullBlock.write(toFile: fullTreePath, atomically: true, encoding: .utf8)
-
-var cappedBody = body
-var omitted = 0
-if body.count > maxChars {
-    // Keep the start (window, toolbar, page top) and the end (tabs, focus,
-    // selection); cut whole lines from the middle.
-    let lines = body.components(separatedBy: "\n")
-    let headBudget = maxChars * 6 / 10, tailBudget = maxChars * 3 / 10
-    var head: [String] = [], tail: [String] = []
-    var used = 0
-    for l in lines { if used + l.count + 1 > headBudget { break }; head.append(l); used += l.count + 1 }
-    used = 0
-    for l in lines.reversed() { if used + l.count + 1 > tailBudget { break }; tail.insert(l, at: 0); used += l.count + 1 }
-    omitted = body.count - head.joined(separator: "\n").count - tail.joined(separator: "\n").count
-    cappedBody = head.joined(separator: "\n")
-        + "\n[… \(omitted) characters omitted here. Full tree: \(esc(fullTreePath))]\n"
-        + tail.joined(separator: "\n")
+// The tree file is Codex's format, line for line.
+var full = "<appshot app=\"\(esc(appName, attribute: true))\" bundle-identifier=\"\(esc(bundleID, attribute: true))\" window-title=\"\(esc(windowTitle, attribute: true))\" image=\"\(esc(imageName, attribute: true))\">"
+full += "\nWindow: \"\(esc(windowTitle))\", App: \(esc(appName)).\n" + tree.lines.joined(separator: "\n")
+if tree.hitNodeLimit { full += "\n[Tree stopped after \(maxNodes) elements.]" }
+if tree.hitTimeLimit { full += "\n[Tree stopped after 6 seconds; \(tree.nodes) elements read. The app was slow to answer.]" }
+if let sel = selection {
+    full += "\n\nSelected text: ```\n\(esc(String(sel.prefix(6_000))))\n```\n\n"
+        + "Note: The user had this text selected when they took the Appshot. If they ask about \"this\" or refer to what they are looking at, they may mean the selection, though they may also mean something else on screen."
+} else if let f = focusLine {
+    full += "\n\nThe focused UI element is \(f)"
 }
-let block = openTag + cappedBody + "</appshot>"
+full += "\n</appshot>"
+try? full.write(toFile: treePath, atomically: true, encoding: .utf8)
 
-// The short form is what gets pasted: who/where plus the selection or focus,
-// with the full tree left in a file for Claude to read when it needs it.
-var shortFooter = ""
-if footer.hasPrefix("Selected text:"), let f = attr(appEl, kAXFocusedUIElementAttribute),
-   let sel = nonEmpty(attr(f as! AXUIElement, kAXSelectedTextAttribute)) {
-    let cut = sel.count > 1_000 ? String(sel.prefix(1_000)) + " […]" : sel
-    shortFooter = "Selected: \(esc(cut))"
-} else if !footer.isEmpty {
-    shortFooter = footer.replacingOccurrences(of: "The focused UI element is ", with: "Focused: ")
+// The pasted block: who and where, the selection or focus, and the tree's path.
+var short = "<appshot app=\"\(esc(appName, attribute: true))\" bundle-identifier=\"\(esc(bundleID, attribute: true))\" window-title=\"\(esc(windowTitle, attribute: true))\""
+if let url { short += " url=\"\(esc(url, attribute: true))\"" }
+short += " image=\"\(esc(imageName, attribute: true))\" tree=\"\(esc(treePath, attribute: true))\">"
+if let sel = selection {
+    short += "\nSelected: " + esc(sel.count > 1_000 ? String(sel.prefix(1_000)) + " […]" : sel)
+} else if let f = focusLine {
+    // A focused container can describe a whole page; the tree file has it all.
+    short += "\nFocused: " + (f.count > 300 ? String(f.prefix(300)).replacingOccurrences(of: "&[a-z]*$", with: "", options: .regularExpression) + " […]" : f)
 }
-var shortTag = "<appshot app=\"\(esc(appName, attribute: true))\" bundle-identifier=\"\(esc(bundleID, attribute: true))\" window-title=\"\(esc(windowTitle, attribute: true))\""
-if let u = tree.firstWebURL { shortTag += " url=\"\(esc(u, attribute: true))\"" }
-shortTag += " image=\"\(esc(imageName, attribute: true))\" tree=\"\(esc(fullTreePath, attribute: true))\">"
-let shortBlock = shortTag + (shortFooter.isEmpty ? "" : "\n" + shortFooter + "\n") + "</appshot>"
+short += "\n</appshot>"
 
 // MARK: - Screenshot
 
@@ -361,19 +322,14 @@ if !CGPreflightScreenCaptureAccess() {
 }
 
 var result: [String: Any] = [
-    "text": block,
-    "short": shortBlock,
+    "text": short,
+    "tree": treePath,
     "app": appName,
     "bundleID": bundleID,
     "windowTitle": windowTitle,
-    "fullTreePath": fullTreePath,
     "nodes": tree.nodes,
-    "timeLimited": tree.hitTimeLimit,
-    "seconds": String(format: "%.1f", Date().timeIntervalSince(started)),
-    "chars": block.count,
-    "omittedChars": omitted,
     "warnings": warnings,
 ]
+if let url { result["url"] = url }
 if let savedImage { result["image"] = savedImage }
-if let u = tree.firstWebURL { result["url"] = u }
 emit(result)

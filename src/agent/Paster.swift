@@ -7,7 +7,7 @@ enum DeliveryOutcome {
 }
 
 /// Brings Claude forward and pastes the Appshot text, then the screenshot,
-/// into whatever has focus there. Never presses Return. Restores the
+/// into the Code session's message box. Never presses Return. Restores the
 /// clipboard afterwards.
 enum Paster {
     static func deliver(_ r: CaptureResult) -> DeliveryOutcome {
@@ -25,16 +25,13 @@ enum Paster {
         }
         Thread.sleep(forTimeInterval: 0.25)
 
-        let f = focused(claude.processIdentifier)
-        log("paste target role=\(f.role ?? "nil") label=\(f.label ?? "") placeholder=\(f.placeholder ?? "") window=\(f.windowSize)")
-        guard let role = f.role, editableRoles.contains(role) else {
-            setText(r.text, on: pb)
-            return .copiedOnly("Claude's message box wasn't focused")
-        }
-        // Only a Claude Code session's message box: it is labelled "Prompt" and
-        // its placeholder mentions sending. Anything else (a chat composer,
-        // Claude's own quick-entry box, a search field) gets a copy instead.
-        guard f.label == "Prompt" || (f.placeholder ?? "").contains("to send") else {
+        // Only a Claude Code session's message box; a chat composer or Claude's
+        // own quick-entry box gets a copy instead.
+        // shortcut: relies on Claude labelling that box "Prompt"; if pastes turn
+        // into copies after a Claude update, check "label=" in appshots.log.
+        let f = focusedField(claude.processIdentifier)
+        log("paste target role=\(f.role ?? "nil") label=\(f.label ?? "")")
+        guard f.role == "AXTextArea", f.label == "Prompt" else {
             setText(r.text, on: pb)
             return .copiedOnly("Claude wasn't showing a Code session's message box")
         }
@@ -57,8 +54,6 @@ enum Paster {
         return .pasted
     }
 
-    private static let editableRoles: Set<String> = ["AXTextArea", "AXTextField", "AXComboBox", "AXSearchField"]
-
     private static func setText(_ s: String, on pb: NSPasteboard) {
         pb.clearContents()
         pb.setString(s, forType: .string)
@@ -79,14 +74,13 @@ enum Paster {
         return false
     }
 
-    struct Focus { var role, label, placeholder: String?; var windowSize = "?" }
-
     private static func attr(_ el: AXUIElement, _ name: String) -> AnyObject? {
         var v: AnyObject?
         return AXUIElementCopyAttributeValue(el, name as CFString, &v) == .success ? v : nil
     }
 
-    private static func focused(_ pid: pid_t) -> Focus {
+    /// Role and label (title, else description) of Claude's focused element.
+    private static func focusedField(_ pid: pid_t) -> (role: String?, label: String?) {
         let app = AXUIElementCreateApplication(pid)
         // Electron only exposes its accessibility tree once asked.
         AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
@@ -94,22 +88,13 @@ enum Paster {
         for _ in 0..<3 {
             if let v = attr(app, kAXFocusedUIElementAttribute) {
                 let el = v as! AXUIElement
-                var f = Focus()
-                f.role = attr(el, kAXRoleAttribute) as? String
                 let title = attr(el, kAXTitleAttribute) as? String
-                let desc = attr(el, kAXDescriptionAttribute) as? String
-                f.label = (title?.isEmpty == false ? title : desc)
-                f.placeholder = attr(el, kAXPlaceholderValueAttribute) as? String
-                if let w = attr(el, kAXWindowAttribute), let sv = attr(w as! AXUIElement, kAXSizeAttribute) {
-                    var size = CGSize.zero
-                    AXValueGetValue(sv as! AXValue, .cgSize, &size)
-                    f.windowSize = "\(Int(size.width))x\(Int(size.height))"
-                }
-                if f.role != nil { return f }
+                let label = (title?.isEmpty == false) ? title : attr(el, kAXDescriptionAttribute) as? String
+                return (attr(el, kAXRoleAttribute) as? String, label)
             }
             Thread.sleep(forTimeInterval: 0.15)
         }
-        return Focus()
+        return (nil, nil)
     }
 
     private static func commandV() {

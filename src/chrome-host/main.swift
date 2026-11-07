@@ -10,7 +10,9 @@
 // (~/.claude/appshots/chrome-pending.json) and is valid for 15 minutes.
 import Foundation
 
-let base = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/appshots")
+let home = ProcessInfo.processInfo.environment["HOME"].map { URL(fileURLWithPath: $0) }
+    ?? FileManager.default.homeDirectoryForCurrentUser
+let base = home.appendingPathComponent(".claude/appshots")
 let pendingFile = base.appendingPathComponent("chrome-pending.json")
 let logFile = base.appendingPathComponent("appshots.log")
 let maxAge: TimeInterval = 15 * 60

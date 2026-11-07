@@ -63,8 +63,8 @@ enum CaptureRunner {
             return .failure(.failed("capture tool returned nothing"))
         }
         if let err = obj["error"] as? String { return .failure(.failed(err)) }
-        guard let text = (obj["short"] as? String) ?? (obj["text"] as? String) else { return .failure(.failed("no text")) }
-        log("captured app=\(obj["bundleID"] ?? "?") nodes=\(obj["nodes"] ?? "?") chars=\(obj["chars"] ?? "?") pasted=\(text.count) omitted=\(obj["omittedChars"] ?? 0) warnings=\(obj["warnings"] ?? [])")
+        guard let text = obj["text"] as? String else { return .failure(.failed("no text")) }
+        log("captured app=\(obj["bundleID"] ?? "?") nodes=\(obj["nodes"] ?? "?") pasted=\(text.count) chars warnings=\(obj["warnings"] ?? [])")
         return .success(CaptureResult(
             text: text,
             image: obj["image"] as? String,

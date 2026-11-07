@@ -17,7 +17,6 @@ final class DoubleTapDetector {
     var key: Key
     private let onTrigger: () -> Void
     private var monitors: [Any] = []
-    private var seenFirstEvent = false
 
     private var down = false
     private var downAt: TimeInterval = 0
@@ -52,8 +51,7 @@ final class DoubleTapDetector {
         monitors = []
     }
 
-    private func handle(_ e: NSEvent) {
-        if !seenFirstEvent { seenFirstEvent = true; log("hotkey: first event received type=\(e.type.rawValue)") }
+    func handle(_ e: NSEvent) {
         let now = e.timestamp
         guard e.type == .flagsChanged else { taps = 0; if down { spoiled = true }; return }
 
