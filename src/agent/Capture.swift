@@ -1,7 +1,8 @@
 import AppKit
 
 enum Paths {
-    static let base = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/appshots")
+    static let base = (ProcessInfo.processInfo.environment["HOME"].map { URL(fileURLWithPath: $0) }
+        ?? FileManager.default.homeDirectoryForCurrentUser).appendingPathComponent(".claude/appshots")
     static let captures = base.appendingPathComponent("captures")
     static let captureTool = base.appendingPathComponent("bin/appshot-capture")
     static let log = base.appendingPathComponent("appshots.log")

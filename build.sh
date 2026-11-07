@@ -49,7 +49,7 @@ if [[ "${1:-}" == "--host" || ! -d "$APP" ]]; then
 </dict>
 </plist>
 PLIST
-  codesign --force --sign - --identifier "$BUNDLE_ID" "$APP"
+  codesign --force --sign - --identifier "$BUNDLE_ID" "$APP" 2>/dev/null
   echo "Built $APP"
 fi
 echo "Done."

@@ -12,6 +12,7 @@ command -v swiftc >/dev/null || { echo "Needs Apple's command line tools: run  x
 
 echo "1/4 Building"
 ./build.sh >/dev/null
+pkill -f "$BASE/bin/appshot-agent" 2>/dev/null || true  # the app restarts it on the new build
 
 echo "2/4 Claude skill and instructions"
 mkdir -p "$HOME/.claude/skills"
