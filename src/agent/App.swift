@@ -88,7 +88,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let pid = front.processIdentifier
             work.async { [self] in
                 let outcome: (String, String)
-                switch CaptureRunner.run(pid: pid) {
+                // Never run a capture tool that isn't the one built here.
+                let result = bundleIntact(Paths.app) ? CaptureRunner.run(pid: pid)
+                    : .failure(.failed("Appshots' files changed since it was built. Run ~/.claude/appshots/install.sh"))
+                switch result {
                 case .failure(let e):
                     log("capture failed: \(e)")
                     outcome = ("Appshot failed", e.description)

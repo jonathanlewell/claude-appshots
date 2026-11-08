@@ -4,7 +4,10 @@ enum Paths {
     static let base = (ProcessInfo.processInfo.environment["HOME"].map { URL(fileURLWithPath: $0) }
         ?? FileManager.default.homeDirectoryForCurrentUser).appendingPathComponent(".claude/appshots")
     static let captures = base.appendingPathComponent("captures")
-    static let captureTool = base.appendingPathComponent("bin/appshot-capture")
+    /// The app bundle this agent runs from, and the capture tool inside it.
+    static let app = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    static let captureTool = app.appendingPathComponent("Contents/MacOS/appshot-capture")
     static let log = base.appendingPathComponent("appshots.log")
     static let claudeBundleID = "com.anthropic.claudefordesktop"
 }
@@ -33,7 +36,7 @@ enum CaptureError: Error, CustomStringConvertible {
     case toolMissing, failed(String), timeout
     var description: String {
         switch self {
-        case .toolMissing: return "capture tool missing — run build.sh"
+        case .toolMissing: return "capture tool missing — run install.sh"
         case .failed(let s): return s
         case .timeout: return "capture timed out"
         }

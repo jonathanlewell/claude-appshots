@@ -1,6 +1,6 @@
 # Self-check for the Chrome bridge's native host. Run: tests/run.sh
 import json, os, struct, subprocess, sys, tempfile, time
-host = os.path.join(os.path.dirname(__file__), "..", "bin", "appshot-chrome-host")
+host = os.environ["HOST"]
 home = tempfile.mkdtemp()
 os.makedirs(f"{home}/.claude/appshots")
 pending = f"{home}/.claude/appshots/chrome-pending.json"

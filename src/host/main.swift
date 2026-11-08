@@ -1,47 +1,24 @@
 // Claude Appshots launcher.
 //
 // This is the only part macOS grants permissions to, and the only part that
-// can show a menu bar icon, so it owns the icon and menu. It is kept small
-// and generic and should almost never be rebuilt: a rebuild changes its
-// signature and macOS then asks for Accessibility and Screen Recording again.
+// can show a menu bar icon, so it owns the icon and menu. build.sh signs it
+// with this Mac's own certificate, which is what macOS ties the permissions
+// to, so rebuilding keeps them.
 //
-// It starts the agent (~/.claude/appshots/bin/appshot-agent), which inherits
-// those permissions and does the real work: hotkey, capture, paste.
+// It starts the agent (Contents/MacOS/appshot-agent), which inherits those
+// permissions and does the real work: hotkey, capture, paste. It first checks
+// the whole app still matches this Mac's signature, so a swapped helper never
+// gets those permissions.
 //
 // Agent → launcher (agent's stdout):   NOTIFY<TAB>title<TAB>body
 // Launcher → agent (agent's stdin):    PAUSE 0|1 · HOTKEY option|command|control · CAPTURE <delay-seconds>
-//
-// Test mode, for checking captures without the hotkey:
-//   open -n "~/Applications/Claude Appshots.app" --args --test-capture <bundle-id> <out.json>
 
 import AppKit
 import ServiceManagement
 import UserNotifications
 
-let base = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/appshots")
-let agentURL = base.appendingPathComponent("bin/appshot-agent")
-let captureURL = base.appendingPathComponent("bin/appshot-capture")
-let capturesURL = base.appendingPathComponent("captures")
-
-// MARK: Test mode
-
-let args = CommandLine.arguments
-if let i = args.firstIndex(of: "--test-capture"), args.count > i + 2 {
-    let bundle = args[i + 1], out = URL(fileURLWithPath: args[i + 2])
-    guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundle).first else {
-        try? Data(#"{"error":"app not running"}"#.utf8).write(to: out); exit(0)
-    }
-    let p = Process()
-    p.executableURL = captureURL
-    p.arguments = ["--pid", String(app.processIdentifier), "--outdir", capturesURL.path]
-    let pipe = Pipe()
-    p.standardOutput = pipe
-    try? p.run()
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    p.waitUntilExit()
-    try? data.write(to: out)
-    exit(0)
-}
+let agentURL = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/appshot-agent")
+let capturesURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/appshots/captures")
 
 if NSRunningApplication.runningApplications(withBundleIdentifier: Bundle.main.bundleIdentifier ?? "").count > 1 {
     exit(0)
@@ -63,11 +40,16 @@ final class Launcher: NSObject, NSApplicationDelegate, NSMenuDelegate {
         set { UserDefaults.standard.set(newValue, forKey: "paused") }
     }
     private var hotkey: String {
-        get { UserDefaults.standard.string(forKey: "hotkey") ?? "option" }
+        get { UserDefaults.standard.string(forKey: "hotkey") ?? "command" }
         set { UserDefaults.standard.set(newValue, forKey: "hotkey") }
     }
 
     func applicationDidFinishLaunching(_ n: Notification) {
+        // macOS puts a new icon at the left end of the icons, which on a notched
+        // Mac is behind the notch, so start it near the clock (points from the
+        // right edge). ⌘-drag it anywhere; macOS then keeps that spot.
+        let spot = "NSStatusItem Preferred Position Item-0"
+        if UserDefaults.standard.object(forKey: spot) == nil { UserDefaults.standard.set(250, forKey: spot) }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let menu = NSMenu()
         menu.delegate = self
@@ -97,11 +79,11 @@ final class Launcher: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !quitting else { return }
         recentStarts = recentStarts.filter { $0.timeIntervalSinceNow > -60 } + [Date()]
         guard recentStarts.count <= 5 else {
-            post("Claude Appshots stopped", "The agent keeps crashing. Rebuild with ~/.claude/appshots/build.sh, then reopen the app.")
+            post("Claude Appshots stopped", "The agent keeps crashing. Run ~/.claude/appshots/install.sh, then reopen the app.")
             return
         }
-        guard FileManager.default.isExecutableFile(atPath: agentURL.path) else {
-            post("Claude Appshots", "Agent missing. Run ~/.claude/appshots/build.sh.")
+        guard bundleIntact(Bundle.main.bundleURL) else {
+            post("Claude Appshots stopped", "Its files changed since it was built. Run ~/.claude/appshots/install.sh.")
             return
         }
         let p = Process()
@@ -180,7 +162,9 @@ final class Launcher: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(hk)
         menu.addItem(.separator())
         menu.addItem(item("Permissions…", #selector(openPermissions)))
-        menu.addItem(item("Quit Claude Appshots", #selector(quit)))
+        let q = item("Quit Claude Appshots", #selector(quit))
+        q.keyEquivalent = "q"
+        menu.addItem(q)
     }
 
     private func disabled(_ menu: NSMenu, _ title: String) {

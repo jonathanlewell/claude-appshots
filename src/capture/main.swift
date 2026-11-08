@@ -3,9 +3,10 @@
 // Builds a Codex-style <appshot> block for one app's front window: header,
 // accessibility tree, focused element or selected text, plus a screenshot.
 //
-// It is run by "Claude Appshots.app", which holds the Accessibility and
-// Screen Recording permissions; a child process inherits them. Run on its own
-// from a terminal it will report that permission is missing.
+// It is run by the Appshots agent inside "Claude Appshots.app", which holds
+// the Accessibility and Screen Recording permissions; a child process
+// inherits them. Run on its own from a terminal it reports that permission is
+// missing.
 //
 // Usage: appshot-capture --pid N [--outdir DIR]
 // Saves the full Codex-format Appshot (tree) and a screenshot to DIR, and
@@ -19,7 +20,7 @@ func _AXUIElementGetWindow(_ element: AXUIElement, _ windowID: UnsafeMutablePoin
 
 var argPID: pid_t?
 var outDir = FileManager.default.homeDirectoryForCurrentUser
-    .appendingPathComponent(".claude/appshots/captures").path
+    .appendingPathComponent(".claude/appshots/captures").path // --outdir overrides
 var args = CommandLine.arguments.dropFirst().makeIterator()
 while let a = args.next() {
     if a == "--pid" { argPID = args.next().flatMap { pid_t($0) } }

@@ -16,6 +16,10 @@ git clone <your private repo URL> ~/.claude/appshots
 ~/.claude/appshots/install.sh
 ```
 
+It makes this Mac's own signing certificate (in your login keychain), then builds
+and signs the app. macOS asks for your login password to sign: click **Allow**,
+not Always Allow (see Security).
+
 Then, once:
 
 1. **Permissions.** Allow *Claude Appshots* in System Settings → Privacy & Security →
@@ -25,8 +29,9 @@ Then, once:
 2. **Chrome bridge.** `chrome://extensions` → Developer mode on → **Load unpacked** →
    `~/.claude/appshots/chrome-extension` (⌘⇧G in the picker; `.claude` is hidden).
 
-Update: `git -C ~/.claude/appshots pull && ~/.claude/appshots/install.sh`, then
-click reload on *Claude Appshots bridge* in `chrome://extensions`.
+Update: `git -C ~/.claude/appshots pull && ~/.claude/appshots/install.sh` (one
+password prompt; permissions stay), then click reload on *Claude Appshots bridge*
+in `chrome://extensions`.
 Remove: `~/.claude/appshots/uninstall.sh`.
 
 ## Use
@@ -43,7 +48,9 @@ Capture several tabs, then say "control these tabs": the bridge moves every tab
 captured in the last 15 minutes into Claude's group.
 
 Claude's own Quick Entry uses double-tap Option, which is why Appshots uses ⌘.
-Menu bar icon → Hotkey changes it.
+Menu bar icon (a camera viewfinder, near the clock) → Hotkey changes it, Pause stops
+⌘⌘ for a while, and Quit Claude Appshots (⌘Q) closes it until you open the app
+again or log in. ⌘-drag the icon to move it.
 
 ## What's saved
 
@@ -68,34 +75,36 @@ Over 1 MB it's moved to `appshots.log.1`.
 - The Chrome bridge only moves tabs you captured in the last 15 minutes, only into
   Claude in Chrome's group (named "Claude …"), and its native host answers only that
   extension.
-- **Known limit.** macOS grants the two permissions to the launcher app, and the
-  launcher runs `bin/appshot-agent` and `bin/appshot-capture` (and the
-  `--test-capture` mode used by the tests). Anything already running as you could
-  replace those files or use that mode to read windows without asking macOS. This
-  keeps rebuilds from resetting your permissions. To close it: sign the app with
-  a stable certificate, put the tools inside it, and drop the test mode.
+- macOS gives the two permissions to the app as signed by this Mac's certificate.
+  Every helper lives inside the app and is sealed into that signature, and each
+  one is checked before it runs: a swapped or re-signed file is refused, and the
+  menu bar app stops with a notification. Signing needs your password every time,
+  so nothing else can sign a look-alike. (Click Allow, never Always Allow: that
+  would let any program sign with it silently.) Hardened runtime blocks code
+  injection into all of them.
+- shortcut: a helper swapped in the split second between its check and its launch
+  would still run. Closing that means merging the helpers into one program.
 
 ## How it fits together
 
 | Part | Job |
 | --- | --- |
-| `~/Applications/Claude Appshots.app` (`src/host`) | Menu bar icon; holds the two permissions; starts the agent |
-| `bin/appshot-agent` (`src/agent`) | Hotkey, capture, paste into Claude, Chrome note |
-| `bin/appshot-capture` (`src/capture`) | Reads a window's tree and screenshot |
-| `bin/appshot-chrome-host` (`src/chrome-host`) | Native host the Chrome bridge asks "which tabs were captured?" |
+| `Claude Appshots.app` (`src/host`) | Menu bar icon; holds the two permissions; checks the signature, starts the agent |
+| `…/Contents/MacOS/appshot-agent` (`src/agent`) | Hotkey, capture, paste into Claude, Chrome note |
+| `…/Contents/MacOS/appshot-capture` (`src/capture`) | Reads a window's tree and screenshot |
+| `…/Contents/MacOS/appshot-chrome-host` (`src/chrome-host`) | Native host the Chrome bridge asks "which tabs were captured?" |
+| `src/shared/Signature.swift` | The signature check the app and agent run |
 | `chrome-extension/` | Chrome bridge: moves captured tabs into Claude's tab group |
 | `skill/` → `~/.claude/skills/appshot` | How Claude reads and acts on an Appshot |
 | `claude-md-snippet.md` → `~/.claude/CLAUDE.md` | Tells every session to load the skill |
 
-The agent and tools inherit the app's permissions, so `./build.sh` can rebuild them
-freely. Rebuilding the app itself (`./build.sh --host`) changes its signature and
-macOS then asks for both permissions again; avoid it.
+Rebuild with `./install.sh` after any change.
 
 ## Tests
 
 ```bash
-tests/run.sh            # hotkey, Chrome note, bridge and host self-checks
-tests/run.sh --capture  # also captures Chrome, Finder and Claude for real
+tests/run.sh              # hotkey, Chrome note, bridge and host self-checks
+tests/run.sh --installed  # also the installed app's signature check and the newest capture
 ```
 
 ## Troubleshooting
@@ -103,6 +112,8 @@ tests/run.sh --capture  # also captures Chrome, Finder and Claude for real
 - **⌘⌘ does nothing:** the menu bar icon's first line says why (usually a
   permission). `appshots.log` should show `hotkey: double-tap command`.
 - **No screenshot:** Screen Recording permission (see Install).
+- **"Its files changed since it was built":** something altered the app. Run
+  `install.sh` to rebuild it.
 - **Copied instead of pasted:** a Code session's message box wasn't showing.
   `appshots.log` → `paste target … label=` shows what had focus, and
   `message box search:` how many boxes it found.

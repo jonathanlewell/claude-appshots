@@ -1,38 +1,41 @@
 #!/bin/zsh
-# Builds Claude Appshots.
+# Builds ~/Applications/Claude Appshots.app with every helper inside it, and
+# signs it with this Mac's own "Claude Appshots signing" certificate (install.sh
+# makes it). macOS ties the Accessibility and Screen Recording permissions to
+# that certificate, so rebuilding keeps them.
 #
-#   ./build.sh          rebuild the capture tool and the agent (safe: they
-#                       inherit the app's permissions, nothing to re-grant).
-#                       Then restart: pkill -f appshot-agent (the app relaunches it).
-#   ./build.sh --host   also rebuild the launcher app. Avoid: macOS ties
-#                       permissions to its signature, so you must remove and
-#                       re-add Claude Appshots in Accessibility and Screen
-#                       Recording afterwards.
+# macOS asks for your login password once per build to use the certificate.
+# Click Allow, not Always Allow: that prompt is what stops anything else from
+# signing a look-alike that would get Appshots' permissions.
+#
+# Run install.sh rather than this directly: it also restarts the app.
 set -euo pipefail
 
 BASE="$HOME/.claude/appshots"
 APP="$HOME/Applications/Claude Appshots.app"
 BUNDLE_ID="com.jonathanlewell.claude-appshots"
+CERT="Claude Appshots signing"
+cd "$BASE"
 
-mkdir -p "$BASE/bin" "$BASE/captures"
+SHA=$(security find-certificate -c "$CERT" -Z 2>/dev/null | awk '/SHA-1/ {print $NF}')
+[[ -n "$SHA" ]] || { echo "No \"$CERT\" certificate; run install.sh."; exit 1; }
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+echo "let signerSHA1 = \"${SHA:l}\"" > "$tmp/Signer.swift"
 
-echo "Building capture tool…"
-swiftc -O -swift-version 5 "$BASE/src/capture/main.swift" -o "$BASE/bin/appshot-capture"
-codesign --force --sign - "$BASE/bin/appshot-capture" 2>/dev/null
+# Built and signed beside the old app, which is replaced only on success.
+NEW="$tmp/Claude Appshots.app"
+MACOS="$NEW/Contents/MacOS"
+mkdir -p "$MACOS" "$BASE/captures"
+build() { swiftc -O -swift-version 5 "${@:2}" -o "$tmp/$1"; }
 
-echo "Building agent…"
-swiftc -O -swift-version 5 "$BASE"/src/agent/*.swift -o "$BASE/bin/appshot-agent"
-codesign --force --sign - "$BASE/bin/appshot-agent" 2>/dev/null
+echo "Building…"
+build ClaudeAppshots src/host/main.swift src/shared/Signature.swift "$tmp/Signer.swift"
+build appshot-agent src/agent/*.swift src/shared/Signature.swift "$tmp/Signer.swift"
+build appshot-capture src/capture/main.swift
+build appshot-chrome-host src/chrome-host/main.swift
+for b in ClaudeAppshots appshot-agent appshot-capture appshot-chrome-host; do mv -f "$tmp/$b" "$MACOS/$b"; done
 
-echo "Building Chrome bridge host…"
-swiftc -O -swift-version 5 "$BASE/src/chrome-host/main.swift" -o "$BASE/bin/appshot-chrome-host"
-codesign --force --sign - "$BASE/bin/appshot-chrome-host" 2>/dev/null
-
-if [[ "${1:-}" == "--host" || ! -d "$APP" ]]; then
-  echo "Building launcher app…"
-  mkdir -p "$APP/Contents/MacOS"
-  swiftc -O -swift-version 5 "$BASE"/src/host/main.swift -o "$APP/Contents/MacOS/ClaudeAppshots"
-  cat > "$APP/Contents/Info.plist" <<PLIST
+cat > "$NEW/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -49,7 +52,14 @@ if [[ "${1:-}" == "--host" || ! -d "$APP" ]]; then
 </dict>
 </plist>
 PLIST
-  codesign --force --sign - --identifier "$BUNDLE_ID" "$APP" 2>/dev/null
-  echo "Built $APP"
-fi
-echo "Done."
+
+# Helpers are sealed into the app's signature; hardened runtime stops code
+# being injected into any of them.
+for h in appshot-agent appshot-capture appshot-chrome-host; do
+  codesign --force --options runtime --identifier "$BUNDLE_ID.${h#appshot-}" --sign - "$MACOS/$h" 2>/dev/null
+done
+echo "Signing (macOS asks for your login password: click Allow)…"
+codesign --force --options runtime --identifier "$BUNDLE_ID" --sign "$SHA" "$NEW"
+codesign --verify --strict --deep -R="certificate leaf = H\"${SHA:l}\"" "$NEW"
+mkdir -p "${APP:h}"; rm -rf "$APP"; mv "$NEW" "$APP"
+echo "Built $APP"
