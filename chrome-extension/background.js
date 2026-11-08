@@ -34,6 +34,11 @@ async function onGroupActivity(groupId) {
   if (groupId == null || groupId === NONE || busy) return;
   busy = true;
   try {
+    // Only Claude in Chrome's group ("Claude …"), never one of his own.
+    // shortcut: matches the group's name; if tabs stop moving after a Claude
+    // update, check what Claude in Chrome now calls its group.
+    const group = await chrome.tabGroups.get(groupId);
+    if (!/claude/i.test(group.title || "")) return;
     const res = await ask({ cmd: "pending" });
     const notes = (res && res.captures) || [];
     if (!notes.length) return;
@@ -55,6 +60,8 @@ async function onGroupActivity(groupId) {
 }
 
 chrome.tabGroups.onCreated.addListener((g) => onGroupActivity(g.id));
+// A new group may only get its name a moment later.
+chrome.tabGroups.onUpdated.addListener((g) => onGroupActivity(g.id));
 chrome.tabs.onCreated.addListener((t) => { if (t.groupId !== NONE) onGroupActivity(t.groupId); });
 // A tab joining a group, or a grouped tab starting to load (Claude navigating
 // its placeholder), both mean Claude is at work in that group.

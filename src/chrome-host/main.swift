@@ -19,7 +19,8 @@ let maxAge: TimeInterval = 15 * 60
 
 func log(_ s: String) {
     let f = ISO8601DateFormatter()
-    let line = "\(f.string(from: Date())) chrome-bridge: \(s)\n"
+    // One line per event, whatever the extension sends.
+    let line = "\(f.string(from: Date())) chrome-bridge: \(s.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\r", with: " "))\n"
     if let h = try? FileHandle(forWritingTo: logFile) {
         h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
     }
@@ -55,6 +56,7 @@ func writeList(_ l: [[String: Any]]) {
     if l.isEmpty { try? FileManager.default.removeItem(at: pendingFile); return }
     if let d = try? JSONSerialization.data(withJSONObject: ["captures": l]) {
         try? d.write(to: pendingFile, options: .atomic)
+        chmod(pendingFile.path, 0o600) // page addresses and titles
     }
 }
 

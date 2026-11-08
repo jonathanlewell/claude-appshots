@@ -26,18 +26,24 @@ enum Paster {
         Thread.sleep(forTimeInterval: 0.25)
 
         // Only a Claude Code session's message box; a chat composer or Claude's
-        // own quick-entry box gets a copy instead.
+        // own quick-entry box gets a copy instead. If focus is elsewhere in the
+        // window (say, a message he clicked), move it to the box first.
         // shortcut: relies on Claude labelling that box "Prompt"; if pastes turn
         // into copies after a Claude update, check "label=" in appshots.log.
-        let f = focusedField(claude.processIdentifier)
+        let pid = claude.processIdentifier
+        var f = focusedField(pid)
         log("paste target role=\(f.role ?? "nil") label=\(f.label ?? "")")
-        guard f.role == "AXTextArea", f.label == "Prompt" else {
+        if !isPrompt(f), focusOnlyPrompt(pid) { f = focusedField(pid); log("moved focus to the message box") }
+        guard isPrompt(f) else {
             setText(r.text, on: pb)
             return .copiedOnly("Claude wasn't showing a Code session's message box")
         }
 
-        setText(r.text, on: pb)
-        commandV()
+        setText(r.text, on: pb, transient: true)
+        guard pasteIfStillThere(pid) else {
+            setText(r.text, on: pb)
+            return .copiedOnly("Claude lost focus before pasting")
+        }
         Thread.sleep(forTimeInterval: 0.45)
 
         if let img = r.image, let data = try? Data(contentsOf: URL(fileURLWithPath: img)) {
@@ -45,18 +51,68 @@ enum Paster {
             let item = NSPasteboardItem()
             item.setData(data, forType: .png)
             if let tiff = NSImage(data: data)?.tiffRepresentation { item.setData(tiff, forType: .tiff) }
+            item.setData(Data(), forType: transientType)
             pb.writeObjects([item])
-            commandV()
-            Thread.sleep(forTimeInterval: 0.7)
+            if pasteIfStillThere(pid) { Thread.sleep(forTimeInterval: 0.7) }
         }
 
-        saved.restore(to: pb)
+        // Unless he copied something meanwhile, put his clipboard back.
+        if pb.changeCount == ourChange { saved.restore(to: pb) }
         return .pasted
     }
 
-    private static func setText(_ s: String, on pb: NSPasteboard) {
+    /// Marks clipboard contents that clipboard-history apps should not keep
+    /// (nspasteboard.org convention), since an Appshot holds screen contents.
+    private static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
+    private static var ourChange = 0
+
+    private static func setText(_ s: String, on pb: NSPasteboard, transient: Bool = false) {
         pb.clearContents()
         pb.setString(s, forType: .string)
+        if transient { pb.setData(Data(), forType: transientType) }
+    }
+
+    private static func isPrompt(_ f: (role: String?, label: String?)) -> Bool {
+        f.role == "AXTextArea" && f.label == "Prompt"
+    }
+
+    /// ⌘V, only if Claude is still in front with the message box focused, so a
+    /// window switch mid-paste can't send the Appshot to another app.
+    private static func pasteIfStillThere(_ pid: pid_t) -> Bool {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
+              isPrompt(focusedField(pid)) else { return false }
+        commandV()
+        ourChange = NSPasteboard.general.changeCount
+        return true
+    }
+
+    /// Focuses the message box in Claude's front window when there is exactly
+    /// one (with two sessions side by side, which one he meant is unknowable).
+    private static func focusOnlyPrompt(_ pid: pid_t) -> Bool {
+        let app = AXUIElementCreateApplication(pid)
+        guard let w = attr(app, kAXFocusedWindowAttribute) else { return false }
+        // Breadth-first, one round trip per element, skipping the inside of
+        // each message ("Message 12") so a long conversation stays quick.
+        let names = [kAXRoleAttribute, kAXDescriptionAttribute, kAXTitleAttribute, kAXChildrenAttribute] as CFArray
+        var queue = [w as! AXUIElement], found: [AXUIElement] = [], i = 0
+        let deadline = Date().addingTimeInterval(1.5)
+        while i < queue.count, i < 5_000, Date() < deadline {
+            let el = queue[i]; i += 1
+            var vals: CFArray?
+            guard AXUIElementCopyMultipleAttributeValues(el, names, AXCopyMultipleAttributeOptions(rawValue: 0), &vals) == .success,
+                  let v = vals as? [AnyObject], v.count == 4 else { continue }
+            if v[0] as? String == "AXTextArea" {
+                if v[1] as? String == "Prompt" || v[2] as? String == "Prompt" { found.append(el) }
+            } else if !((v[1] as? String)?.hasPrefix("Message ") ?? false), let kids = v[3] as? [AXUIElement] {
+                queue += kids
+            }
+        }
+        let complete = i == queue.count
+        log("message box search: \(found.count) found in \(i) elements, complete=\(complete)")
+        guard found.count == 1, complete else { return false }
+        AXUIElementSetAttributeValue(found[0], kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        Thread.sleep(forTimeInterval: 0.15)
+        return true
     }
 
     private static func activate(_ app: NSRunningApplication) {

@@ -232,11 +232,13 @@ walk(window, depth: 0, into: &tree)
 
 if (tree.emptyWebArea || tree.nodes < 4) && !tree.hitTimeLimit {
     // Chromium sometimes needs the older switch and a moment to build the tree.
+    // Put it back as found: VoiceOver users have it on.
+    let wasOn = (attr(appEl, "AXEnhancedUserInterface") as? Bool) == true
     setFlag(appEl, "AXEnhancedUserInterface", true)
     Thread.sleep(forTimeInterval: 0.8)
     tree = Walk()
     walk(window, depth: 0, into: &tree)
-    setFlag(appEl, "AXEnhancedUserInterface", false)
+    if !wasOn { setFlag(appEl, "AXEnhancedUserInterface", false) }
 }
 
 if let first = tree.lines.first, !first.contains("URL: "), let u = tree.firstWebURL {
@@ -258,7 +260,8 @@ if let f = attr(appEl, kAXFocusedUIElementAttribute).map({ $0 as! AXUIElement })
 let stamp = ISO8601DateFormatter.string(from: Date(), timeZone: TimeZone(identifier: "UTC")!,
                                         formatOptions: [.withInternetDateTime, .withFractionalSeconds])
     .replacingOccurrences(of: ":", with: "-")
-let baseName = "\(appName) Appshot \(stamp)"
+// An app name is chosen by the app; "/" in it must not lead outside outDir.
+let baseName = "\(appName.replacingOccurrences(of: "/", with: "-")) Appshot \(stamp)"
 // Screen contents: readable by this user only.
 try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
 chmod(outDir, 0o700)

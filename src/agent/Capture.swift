@@ -104,9 +104,14 @@ enum ChromeHandoff {
 }
 
 enum Cleanup {
-    /// Deletes captures older than 24 hours.
+    /// Deletes captures older than 24 hours and keeps the log under 1 MB.
     static func run() {
         let fm = FileManager.default
+        if let size = (try? fm.attributesOfItem(atPath: Paths.log.path))?[.size] as? Int, size > 1_000_000 {
+            let old = Paths.log.appendingPathExtension("1")
+            try? fm.removeItem(at: old)
+            try? fm.moveItem(at: Paths.log, to: old)
+        }
         guard let items = try? fm.contentsOfDirectory(at: Paths.captures, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
         let cutoff = Date().addingTimeInterval(-24 * 3600)
         var removed = 0

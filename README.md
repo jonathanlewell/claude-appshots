@@ -35,8 +35,10 @@ Remove: `~/.claude/appshots/uninstall.sh`.
 2. In any app or Chrome tab, double-tap ⌘ (two quick taps, nothing else).
 3. Add your request and press Return. Nothing is ever sent for you.
 
-If Claude isn't showing a Code session's message box, the Appshot is copied
-instead and a notification says so: click the box and press ⌘V.
+If a message in the conversation has focus, Appshots moves focus to the message box
+first. If Claude isn't showing a Code session's message box (or shows two, side by
+side), the Appshot is copied instead and a notification says so: click the box and
+press ⌘V.
 Capture several tabs, then say "control these tabs": the bridge moves every tab
 captured in the last 15 minutes into Claude's group.
 
@@ -53,6 +55,25 @@ Menu bar icon → Hotkey changes it.
   fields are blanked. The paste only points to it; Claude reads it when needed.
 
 `appshots.log` records events (app, element count, paste target), never content.
+Over 1 MB it's moved to `appshots.log.1`.
+
+## Security
+
+- Captures, the Chrome note and the log live under `~/.claude`, which only your
+  account can read. Password fields are never read. The Appshot is marked so
+  clipboard-history apps don't keep it, and your clipboard is put back after the
+  paste unless you copied something in the meantime.
+- ⌘V is sent only after checking that Claude is still in front with the message box
+  focused, so switching windows mid-paste can't send it anywhere else.
+- The Chrome bridge only moves tabs you captured in the last 15 minutes, only into
+  Claude in Chrome's group (named "Claude …"), and its native host answers only that
+  extension.
+- **Known limit.** macOS grants the two permissions to the launcher app, and the
+  launcher runs `bin/appshot-agent` and `bin/appshot-capture` (and the
+  `--test-capture` mode used by the tests). Anything already running as you could
+  replace those files or use that mode to read windows without asking macOS. This
+  keeps rebuilds from resetting your permissions. To close it: sign the app with
+  a stable certificate, put the tools inside it, and drop the test mode.
 
 ## How it fits together
 
@@ -83,6 +104,7 @@ tests/run.sh --capture  # also captures Chrome, Finder and Claude for real
   permission). `appshots.log` should show `hotkey: double-tap command`.
 - **No screenshot:** Screen Recording permission (see Install).
 - **Copied instead of pasted:** a Code session's message box wasn't showing.
-  `appshots.log` → `paste target … label=` shows what had focus.
+  `appshots.log` → `paste target … label=` shows what had focus, and
+  `message box search:` how many boxes it found.
 - **Chrome tab not moved:** `appshots.log` → `chrome-bridge:` lines. No lines means
   the extension isn't loaded or needs a reload.

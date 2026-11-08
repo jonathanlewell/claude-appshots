@@ -1,6 +1,7 @@
 // Self-check for the Chrome bridge extension against a mocked Chrome. Run: tests/run.sh
 const src = require("fs").readFileSync(__dirname + "/../chrome-extension/background.js", "utf8");
 let on = {}, grouped = [], done = [], queue = [];
+const titles = { 77: "Claude desktop app", 88: "Work" };
 let tabs = [
   { id: 1, url: "https://github.com/x", title: "GitHub", active: false, groupId: -1, lastAccessed: 5 },
   { id: 2, url: "https://app.example.com/cal?a=1&b=2", title: "Calendar", active: true, groupId: -1, lastAccessed: 9 },
@@ -8,7 +9,12 @@ let tabs = [
   { id: 4, url: "chrome://newtab/", title: "New tab", active: true, groupId: 77, lastAccessed: 10 },
 ];
 global.chrome = {
-  tabGroups: { TAB_GROUP_ID_NONE: -1, onCreated: { addListener: (f) => (on.group = f) } },
+  tabGroups: {
+    TAB_GROUP_ID_NONE: -1,
+    onCreated: { addListener: (f) => (on.group = f) },
+    onUpdated: { addListener: (f) => (on.groupUpdated = f) },
+    get: async (id) => ({ id, title: titles[id] ?? "" }),
+  },
   tabs: {
     onCreated: { addListener: (f) => (on.created = f) },
     onUpdated: { addListener: (f) => (on.updated = f) },
@@ -48,5 +54,11 @@ const check = (name, ok) => { console.log((ok ? "ok   " : "FAIL ") + name); if (
   queue = [{ time: 3, url: "gone.example", windowTitle: "Gone - Google Chrome" }];
   on.created({ groupId: 77 }); await tick();
   check("keeps a capture whose tab isn't open", queue.length === 1 && grouped.length === 0);
+  queue = [{ time: 6, url: "github.com/x", windowTitle: "" }]; grouped = [];
+  on.group({ id: 88 }); on.groupUpdated({ id: 88 }); await tick();
+  check("leaves his own groups alone", grouped.length === 0 && queue.length === 1);
+  titles[99] = ""; on.group({ id: 99 }); await tick();
+  titles[99] = "Claude"; on.groupUpdated({ id: 99 }); await tick();
+  check("waits for Claude's group to be named", grouped.join() === "1" && queue.length === 0);
   process.exit(failed ? 1 : 0);
 })();
