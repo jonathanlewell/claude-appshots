@@ -2,7 +2,8 @@ import AppKit
 
 /// Fires when one modifier key (Option, Command or Control) is tapped twice
 /// on its own: press and release, twice, quickly, with no other key,
-/// modifier or click in between. Option+3 (#) or Option-click never count.
+/// modifier (fn included) or click in between. Control-click or fn+Control
+/// (Wispr Flow) never count.
 final class DoubleTapDetector {
     enum Key: String, CaseIterable {
         case option, command, control
@@ -55,7 +56,7 @@ final class DoubleTapDetector {
         let now = e.timestamp
         guard e.type == .flagsChanged else { taps = 0; if down { spoiled = true }; return }
 
-        let flags = e.modifierFlags.intersection([.shift, .control, .option, .command])
+        let flags = e.modifierFlags.intersection([.shift, .control, .option, .command, .function])
         let isDown = flags.contains(key.flag)
 
         if !down && isDown {

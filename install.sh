@@ -95,5 +95,5 @@ Chrome, once (to let Claude control the exact tab you capture):
 chrome://extensions → Developer mode on → Load unpacked → $BASE/chrome-extension
 After an update, click reload on Claude Appshots bridge there.
 
-Then open a Claude Code session, go to any window and double-tap ⌘.
+Then open a Claude Code session, go to any window and double-tap ⌃ Control.
 EOF

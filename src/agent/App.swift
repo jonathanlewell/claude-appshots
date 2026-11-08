@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ note: Notification) {
         try? FileManager.default.createDirectory(at: Paths.captures, withIntermediateDirectories: true)
 
-        detector = DoubleTapDetector(key: .option) { [weak self] in self?.trigger() }
+        detector = DoubleTapDetector(key: .control) { [weak self] in self?.trigger() }
         detector.start()
         listenForCommands()
 

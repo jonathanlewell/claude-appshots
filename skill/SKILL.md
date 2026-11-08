@@ -1,11 +1,11 @@
 ---
 name: appshot
-description: Use whenever a user message contains an `<appshot ...>` block (pasted by Claude Appshots when Jonathan double-taps Command on a window). The Appshot names the app, window, Chrome tab URL and the file holding the window's full accessibility tree, plus the selected text or focused element, usually with a screenshot attached, and makes that window the one to work in with Claude in Chrome or computer use.
+description: Use whenever a user message contains an `<appshot ...>` block (pasted by Claude Appshots when Jonathan double-taps Control on a window). The Appshot names the app, window, Chrome tab URL and the file holding the window's full accessibility tree, plus the selected text or focused element, usually with a screenshot attached, and makes that window the one to work in with Claude in Chrome or computer use.
 ---
 
 # Appshots
 
-Jonathan captures a window by double-tapping Command (⌘⌘). Claude Appshots
+Jonathan captures a window by double-tapping Control (⌃⌃). Claude Appshots
 (`~/Applications/Claude Appshots.app`, source and README in `~/.claude/appshots/`)
 pastes a short `<appshot>` block and the window's screenshot into his message.
 It is modelled on Codex's Appshots.

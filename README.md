@@ -1,6 +1,6 @@
 # Claude Appshots
 
-Codex Appshots for the Claude desktop app's Code tab. Double-tap **⌘ Command** on
+Codex Appshots for the Claude desktop app's Code tab. Double-tap **⌃ Control** on
 any window and a short `<appshot>` block plus a screenshot of that window lands in
 your open Claude Code session's message box. Claude then works in that window:
 Chrome tabs through Claude in Chrome (your actual tab, not a copy), other apps
@@ -37,7 +37,7 @@ Remove: `~/.claude/appshots/uninstall.sh`.
 ## Use
 
 1. Have a Claude Code session open (its message box showing).
-2. In any app or Chrome tab, double-tap ⌘ (two quick taps, nothing else).
+2. In any app or Chrome tab, double-tap ⌃ Control (two quick taps, nothing else).
 3. Add your request and press Return. Nothing is ever sent for you.
 
 If a message in the conversation has focus, Appshots moves focus to the message box
@@ -47,9 +47,10 @@ press ⌘V.
 Capture several tabs, then say "control these tabs": the bridge moves every tab
 captured in the last 15 minutes into Claude's group.
 
-Claude's own Quick Entry uses double-tap Option, which is why Appshots uses ⌘.
+Double-tap Option is Claude's Quick Entry and double-tap Command can be Siri's
+shortcut, which is why Appshots uses ⌃.
 Menu bar icon (a camera viewfinder, near the clock) → Hotkey changes it, Pause stops
-⌘⌘ for a while, and Quit Claude Appshots (⌘Q) closes it until you open the app
+⌃⌃ for a while, and Quit Claude Appshots (⌘Q) closes it until you open the app
 again or log in. ⌘-drag the icon to move it.
 
 ## What's saved
@@ -109,8 +110,8 @@ tests/run.sh --installed  # also the installed app's signature check and the new
 
 ## Troubleshooting
 
-- **⌘⌘ does nothing:** the menu bar icon's first line says why (usually a
-  permission). `appshots.log` should show `hotkey: double-tap command`.
+- **⌃⌃ does nothing:** the menu bar icon's first line says why (usually a
+  permission). `appshots.log` should show `hotkey: double-tap control`.
 - **No screenshot:** Screen Recording permission (see Install).
 - **"Its files changed since it was built":** something altered the app. Run
   `install.sh` to rebuild it.

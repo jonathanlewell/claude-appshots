@@ -34,13 +34,14 @@ final class Launcher: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var recentStarts: [Date] = []
     private var statusItem: NSStatusItem!
 
-    private let hotkeys: [(String, String)] = [("option", "⌥ Option"), ("command", "⌘ Command"), ("control", "⌃ Control")]
+    // Taken elsewhere: ⌥⌥ by Claude's Quick Entry, ⌘⌘ by Siri if set to it.
+    private let hotkeys: [(String, String)] = [("control", "⌃ Control"), ("command", "⌘ Command"), ("option", "⌥ Option")]
     private var paused: Bool {
         get { UserDefaults.standard.bool(forKey: "paused") }
         set { UserDefaults.standard.set(newValue, forKey: "paused") }
     }
     private var hotkey: String {
-        get { UserDefaults.standard.string(forKey: "hotkey") ?? "command" }
+        get { UserDefaults.standard.string(forKey: "hotkey") ?? "control" }
         set { UserDefaults.standard.set(newValue, forKey: "hotkey") }
     }
 

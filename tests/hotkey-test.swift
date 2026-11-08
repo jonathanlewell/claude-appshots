@@ -12,9 +12,9 @@ func key(at t: TimeInterval) -> NSEvent {
                      context: nil, characters: "c", charactersIgnoringModifiers: "c", isARepeat: false, keyCode: 8)!
 }
 
-func fires(_ events: [NSEvent]) -> Int {
+func fires(_ events: [NSEvent], _ k: DoubleTapDetector.Key = .command) -> Int {
     var n = 0
-    let d = DoubleTapDetector(key: .command) { n += 1 }
+    let d = DoubleTapDetector(key: k) { n += 1 }
     events.forEach(d.handle)
     return n
 }
@@ -31,9 +31,22 @@ let cases: [(String, [NSEvent], Int)] = [
     ("⌘⇧ is not ⌘", tap(0) + [flags([.command, .shift], at: 0.3), flags([], at: 0.4)], 0),
     ("single tap", tap(0), 0),
 ]
+let ctrl = NSEvent.ModifierFlags.control
+let ctrlTap = { (t: Double) in [flags(ctrl, at: t), flags([], at: t + 0.1)] }
+let fnCtrl = { (t: Double) in [flags(.function, at: t), flags([.function, .control], at: t + 0.05), flags(.function, at: t + 0.1), flags([], at: t + 0.15)] }
+let controlCases: [(String, [NSEvent], Int)] = [
+    ("⌃⌃ fires", ctrlTap(0) + ctrlTap(0.3), 1),
+    ("fn+⌃ twice (Wispr) doesn't", fnCtrl(0) + fnCtrl(0.3), 0),
+    ("⌃ then fn+⌃ doesn't", ctrlTap(0) + fnCtrl(0.3), 0),
+]
 var failed = 0
 for (name, events, want) in cases {
     let got = fires(events)
+    print((got == want ? "ok   " : "FAIL ") + "\(name): fired \(got), expected \(want)")
+    if got != want { failed += 1 }
+}
+for (name, events, want) in controlCases {
+    let got = fires(events, .control)
     print((got == want ? "ok   " : "FAIL ") + "\(name): fired \(got), expected \(want)")
     if got != want { failed += 1 }
 }
