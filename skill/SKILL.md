@@ -62,6 +62,18 @@ The **Appshots Chrome bridge** (an extension he installs once, see the README)
 moves every tab captured in the last 15 minutes into Claude's group the moment a
 tab group is created, a tab joins one, or a tab in a group starts loading.
 Its activity shows as `chrome-bridge:` lines in `~/.claude/appshots/appshots.log`.
+Chrome installs extensions per profile, so the bridge only works in profiles
+where he has loaded it.
+
+**`chrome-bridge-missing-in-profile="<name>"` on the `<appshot>` tag** means the
+app checked and the bridge isn't installed (or is switched off) in the Chrome
+profile he captured from, so nothing will move the tab. Do step 1; if the tab
+isn't in the group, skip steps 2 and 3 and tell him at once:
+"The Appshots bridge isn't installed in your '<name>' Chrome profile, so I can't
+pull the tab in. One-time fix: in a window of that profile, open
+chrome://extensions → Developer mode on → Load unpacked →
+~/.claude/appshots/chrome-extension (⌘⇧G in the picker). For now, drag this tab
+onto the Claude group." Then call `tabs_context_mcp` again when he says so.
 
 1. Call `tabs_context_mcp` with `createIfEmpty: true`. If a tab in the group has
    the Appshot's URL, use it and skip to step 4.

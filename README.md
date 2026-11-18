@@ -28,6 +28,9 @@ Then, once:
    refused, remove it with –, add it back with + (⌘⇧G, `~/Applications`).
 2. **Chrome bridge.** `chrome://extensions` → Developer mode on → **Load unpacked** →
    `~/.claude/appshots/chrome-extension` (⌘⇧G in the picker; `.claude` is hidden).
+   Chrome installs extensions per profile: do this in **every profile you capture
+   from**, above all the one Claude in Chrome is connected to. A capture from a
+   profile without it says so in its notification and in the Appshot.
 
 Update: `git -C ~/.claude/appshots pull && ~/.claude/appshots/install.sh` (one
 password prompt; permissions stay), then click reload on *Claude Appshots bridge*
@@ -119,4 +122,6 @@ tests/run.sh --installed  # also the installed app's signature check and the new
   `appshots.log` → `paste target … label=` shows what had focus, and
   `message box search:` how many boxes it found.
 - **Chrome tab not moved:** `appshots.log` → `chrome-bridge:` lines. No lines means
-  the extension isn't loaded or needs a reload.
+  the extension isn't loaded in that profile or needs a reload;
+  `chrome-handoff: bridge not installed in Chrome profile dir=…` names the profile
+  folder that is missing it.

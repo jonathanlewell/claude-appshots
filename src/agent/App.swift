@@ -95,12 +95,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case .failure(let e):
                     log("capture failed: \(e)")
                     outcome = ("Appshot failed", e.description)
-                case .success(let r):
-                    ChromeHandoff.record(r)
+                case .success(var r):
+                    // A profile without the bridge can't hand the tab to Claude:
+                    // say so in the Appshot itself, so Claude asks for the
+                    // one-time fix instead of waiting for a move that never comes.
+                    var bridgeNote = ""
+                    if let s = ChromeHandoff.record(r), !s.installed {
+                        r = r.adding(attribute: "chrome-bridge-missing-in-profile", s.profileName)
+                        bridgeNote = " — Chrome bridge isn't in the “\(s.profileName)” profile"
+                    }
                     let title = "Appshot: \(r.app) — \(r.windowTitle)"
                     switch Paster.deliver(r) {
                     case .pasted:
-                        let note = r.warnings.contains("screen-recording-not-granted") ? "Pasted without screenshot (needs Screen Recording)" : "Pasted into Claude"
+                        let note = (r.warnings.contains("screen-recording-not-granted") ? "Pasted without screenshot (needs Screen Recording)" : "Pasted into Claude") + bridgeNote
                         outcome = (title, note)
                     case .copiedOnly(let why):
                         log("copied only: \(why)")
