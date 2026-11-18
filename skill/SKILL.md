@@ -60,7 +60,11 @@ He wants Claude to control **the tab he captured**, not a copy (confirmed
 
 The **Appshots Chrome bridge** (an extension he installs once, see the README)
 moves every tab captured in the last 15 minutes into Claude's group the moment a
-tab group is created, a tab joins one, or a tab in a group starts loading.
+tab group is created, a tab joins one, or a grouped tab loads a placeholder (new
+tab or example.com). It never takes a tab out of another Claude group: that tab
+belongs to another session (since 18 November 2026, after a new session pulled
+one out of a working session). If he wants this session to have it, he drags it
+across (step 3).
 Its activity shows as `chrome-bridge:` lines in `~/.claude/appshots/appshots.log`.
 Chrome installs extensions per profile, so the bridge only works in profiles
 where he has loaded it.

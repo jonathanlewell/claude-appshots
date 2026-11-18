@@ -46,8 +46,10 @@ const check = (name, ok) => { console.log((ok ? "ok   " : "FAIL ") + name); if (
   on.updated(9, { groupId: -1 }, { groupId: -1 }); on.created({ groupId: -1 }); await tick();
   check("ignores tabs leaving groups", grouped.length === 0);
   queue = [{ time: 4, url: "github.com/x", windowTitle: "" }]; tabs.find((t) => t.id === 1).groupId = -1;
-  on.updated(4, { status: "loading" }, { id: 4, groupId: 77 }); await tick();
-  check("wakes when a grouped tab loads", grouped.join() === "1");
+  on.updated(4, { status: "loading", url: "https://shop.example/page" }, { id: 4, groupId: 77, url: "https://shop.example/page" }); await tick();
+  check("ignores ordinary page loads in Claude's group", grouped.length === 0 && queue.length === 1);
+  on.updated(4, { status: "loading", url: "https://example.com/" }, { id: 4, groupId: 77, url: "https://example.com/" }); await tick();
+  check("wakes when a grouped tab loads a placeholder", grouped.join() === "1");
   grouped = []; queue = [{ time: 5, url: "github.com/x", windowTitle: "" }]; tabs.find((t) => t.id === 1).groupId = -1;
   on.updated(9, { status: "loading" }, { id: 9, groupId: -1 }); await tick();
   check("ignores ungrouped tabs loading", grouped.length === 0);
@@ -60,5 +62,15 @@ const check = (name, ok) => { console.log((ok ? "ok   " : "FAIL ") + name); if (
   titles[99] = ""; on.group({ id: 99 }); await tick();
   titles[99] = "Claude"; on.groupUpdated({ id: 99 }); await tick();
   check("waits for Claude's group to be named", grouped.join() === "1" && queue.length === 0);
+  // Tab 1 now sits in Claude group 99 (another session). A new Claude group must not take it.
+  titles[55] = "Claude"; grouped = []; done = [];
+  queue = [{ time: 7, url: "github.com/x", windowTitle: "" }];
+  on.group({ id: 55 }); await tick();
+  check("leaves a tab in another Claude group", grouped.length === 0 && tabs.find((t) => t.id === 1).groupId === 99);
+  check("and lets that note go", done.join() === "7" && queue.length === 0);
+  // His own group isn't Claude's: a captured tab there still moves.
+  queue = [{ time: 8, url: "app.example.com/cal?a=1&b=2", windowTitle: "" }]; tabs.find((t) => t.id === 2).groupId = 88;
+  on.group({ id: 55 }); await tick();
+  check("still takes a tab from his own group", grouped.join() === "2");
   process.exit(failed ? 1 : 0);
 })();

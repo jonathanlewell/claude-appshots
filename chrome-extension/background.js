@@ -6,7 +6,8 @@
 // group, so as soon as a tab group is created, a tab joins one or a grouped tab
 // loads (which is what Claude in Chrome does when it starts work), this moves the captured tab
 // into that group. Claude then controls the real tab, as Codex Appshots does.
-// Every capture from the last 15 minutes is moved; each is used once.
+// Every capture from the last 15 minutes is moved; each is used once. A tab
+// already in another Claude group stays where it is.
 
 const HOST = "com.jonathanlewell.claude_appshots";
 const NONE = chrome.tabGroups.TAB_GROUP_ID_NONE;
@@ -30,15 +31,20 @@ async function findCapturedTab(note, tabs) {
   return matches[0];
 }
 
+// shortcut: matches the group's name; if tabs stop moving after a Claude
+// update, check what Claude in Chrome now calls its group.
+async function isClaudeGroup(groupId) {
+  if (groupId == null || groupId === NONE) return false;
+  try { return /claude/i.test((await chrome.tabGroups.get(groupId)).title || ""); }
+  catch (e) { return false; }
+}
+
 async function onGroupActivity(groupId) {
   if (groupId == null || groupId === NONE || busy) return;
   busy = true;
   try {
     // Only Claude in Chrome's group ("Claude …"), never one of his own.
-    // shortcut: matches the group's name; if tabs stop moving after a Claude
-    // update, check what Claude in Chrome now calls its group.
-    const group = await chrome.tabGroups.get(groupId);
-    if (!/claude/i.test(group.title || "")) return;
+    if (!(await isClaudeGroup(groupId))) return;
     const res = await ask({ cmd: "pending" });
     const notes = (res && res.captures) || [];
     if (!notes.length) return;
@@ -47,6 +53,14 @@ async function onGroupActivity(groupId) {
     for (const note of notes) {
       const tab = await findCapturedTab(note, tabs);
       if (!tab) { await ask({ cmd: "log", msg: "no open tab matches a captured page" }); continue; }
+      // Already in another Claude session's group: that session is using it
+      // (18 November 2026 a new session pulled a tab out of a working one).
+      // Leave it there and let the note go.
+      if (tab.groupId !== groupId && await isClaudeGroup(tab.groupId)) {
+        await ask({ cmd: "log", msg: "left a captured tab in another Claude group" });
+        handled.push(note.time);
+        continue;
+      }
       if (tab.groupId !== groupId) await chrome.tabs.group({ groupId, tabIds: [tab.id] });
       tab.groupId = groupId;
       handled.push(note.time);
@@ -63,9 +77,12 @@ chrome.tabGroups.onCreated.addListener((g) => onGroupActivity(g.id));
 // A new group may only get its name a moment later.
 chrome.tabGroups.onUpdated.addListener((g) => onGroupActivity(g.id));
 chrome.tabs.onCreated.addListener((t) => { if (t.groupId !== NONE) onGroupActivity(t.groupId); });
-// A tab joining a group, or a grouped tab starting to load (Claude navigating
-// its placeholder), both mean Claude is at work in that group.
+// A tab joining a group, or a grouped tab loading a placeholder (Claude waking
+// the bridge from a new tab or example.com), means a session wants the tab.
+// Ordinary page loads don't count: another session busy in its own group
+// would otherwise grab a capture meant for this one.
+const PLACEHOLDER = /^(chrome:\/\/newtab\/?|https?:\/\/(www\.)?example\.com\/?)$/;
 chrome.tabs.onUpdated.addListener((id, info, tab) => {
   if ("groupId" in info) onGroupActivity(info.groupId);
-  else if (info.status === "loading") onGroupActivity(tab.groupId);
+  else if (info.status === "loading" && PLACEHOLDER.test(info.url || tab.pendingUrl || tab.url || "")) onGroupActivity(tab.groupId);
 });
