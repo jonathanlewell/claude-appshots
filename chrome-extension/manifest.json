@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Claude Appshots bridge",
-  "version": "1.0",
-  "description": "Adds the tab you capture with Claude Appshots (double-tap Control) to Claude's tab group, so Claude works in that exact tab.",
+  "version": "1.1",
+  "description": "When a Claude session asks for it, adds the tab you captured with Claude Appshots (double-tap Control) to that session's tab group, so Claude works in that exact tab.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAnOMVxDU0Q9rNt2w9vOe+3zYRrTfjkr8FfBTey0MSBNUPqq7Q+ej8wdGGe9PEKOrwTmvedbROuMQLDBA0fgTolMDGskkbL2MGad7F7cS3tan0VWbP5aITHe5jcakWnb3+bZwHEu0/S4/yt1wUJqtGm0u6fX21BcNDyBF04LmXSS0WGNI787pYcROFyT1oYtUqEpKzIav+QUg4WJWRoxrkyrMLQWpFr+ISApjS2tyNMJzJqvCDG/luIRg0Lbwh0t9jpwH+nOEu6wX2FiCkrpwpC+V3Nj9P4wnPXVcTF9YRHDx2+VEiDBe4Yu4EQBHhe2iwBdvj9Ifq+e/NKU1YYFi3TwIDAQAB",
   "permissions": ["tabs", "tabGroups", "nativeMessaging"],
   "background": { "service_worker": "background.js" }

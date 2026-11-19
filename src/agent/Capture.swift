@@ -32,6 +32,9 @@ struct CaptureResult {
     let windowTitle: String
     let url: String?
     let warnings: [String]
+    /// The time in the capture's file names ("2026-11-19T06-44-40.415Z"). A
+    /// Claude session quotes it to the Chrome bridge to ask for this tab.
+    var stamp: String? = nil
 
     /// The same capture with an extra attribute on the pasted `<appshot>` tag.
     func adding(attribute name: String, _ value: String) -> CaptureResult {
@@ -39,7 +42,7 @@ struct CaptureResult {
             .replacingOccurrences(of: "<", with: "&lt;").replacingOccurrences(of: ">", with: "&gt;")
         guard let r = text.range(of: "<appshot ") else { return self }
         let t = text.replacingCharacters(in: r, with: "<appshot \(name)=\"\(v)\" ")
-        return CaptureResult(text: t, image: image, app: app, bundleID: bundleID, windowTitle: windowTitle, url: url, warnings: warnings)
+        return CaptureResult(text: t, image: image, app: app, bundleID: bundleID, windowTitle: windowTitle, url: url, warnings: warnings, stamp: stamp)
     }
 }
 
@@ -87,13 +90,22 @@ enum CaptureRunner {
             bundleID: obj["bundleID"] as? String ?? "",
             windowTitle: obj["windowTitle"] as? String ?? "",
             url: obj["url"] as? String,
-            warnings: obj["warnings"] as? [String] ?? []))
+            warnings: obj["warnings"] as? [String] ?? [],
+            stamp: (obj["tree"] as? String).flatMap(stamp(fromPath:))))
+    }
+
+    /// ".../Google Chrome Appshot 2026-11-19T06-44-40.415Z.txt" → "2026-11-19T06-44-40.415Z"
+    static func stamp(fromPath path: String) -> String? {
+        let name = (path as NSString).lastPathComponent
+        guard let r = name.range(of: " Appshot ", options: .backwards) else { return nil }
+        let s = (name[r.upperBound...] as Substring).replacingOccurrences(of: ".txt", with: "").replacingOccurrences(of: ".png", with: "")
+        return s.isEmpty ? nil : s
     }
 }
 
 /// Tells the Chrome bridge which tab was just captured. The bridge (a small
-/// Chrome extension plus native host) adds that tab to Claude in Chrome's tab
-/// group as soon as Claude creates or uses one, so Claude controls the real
+/// Chrome extension plus native host) adds that tab to a Claude session's tab
+/// group when the session asks for it by stamp, so Claude controls the real
 /// tab. Each note expires after 15 minutes and is used once.
 enum ChromeHandoff {
     static let file = Paths.base.appendingPathComponent("chrome-pending.json")
@@ -114,7 +126,9 @@ enum ChromeHandoff {
            let old = o["captures"] as? [[String: Any]] {
             list = old.filter { (now - (($0["time"] as? Double) ?? 0)) < 15 * 60 && ($0["url"] as? String) != r.url }
         }
-        list.append(["time": now, "url": r.url ?? "", "windowTitle": r.windowTitle])
+        var note: [String: Any] = ["time": now, "url": r.url ?? "", "windowTitle": r.windowTitle]
+        if let s = r.stamp { note["stamp"] = s }
+        list.append(note)
         if let d = try? JSONSerialization.data(withJSONObject: ["captures": list]) {
             try? d.write(to: file, options: .atomic)
             chmod(file.path, 0o600)

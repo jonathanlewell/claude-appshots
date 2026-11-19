@@ -47,8 +47,8 @@ If a message in the conversation has focus, Appshots moves focus to the message 
 first. If Claude isn't showing a Code session's message box (or shows two, side by
 side), the Appshot is copied instead and a notification says so: click the box and
 press ⌘V.
-Capture several tabs, then say "control these tabs": the bridge moves every tab
-captured in the last 15 minutes into Claude's group.
+Capture several tabs, then say "control these tabs": the session asks the bridge
+for each of them and it moves them into that session's group.
 
 Double-tap Option is Claude's Quick Entry and double-tap Command can be Siri's
 shortcut, which is why Appshots uses ⌃.
@@ -76,8 +76,11 @@ Over 1 MB it's moved to `appshots.log.1`.
   paste unless you copied something in the meantime.
 - ⌘V is sent only after checking that Claude is still in front with the message box
   focused, so switching windows mid-paste can't send it anywhere else.
-- The Chrome bridge only moves tabs you captured in the last 15 minutes, only into
-  Claude in Chrome's group (named "Claude …"), and its native host answers only that
+- The Chrome bridge only moves tabs you captured in the last 15 minutes, only when
+  a Claude session asks for that capture by its stamp (it loads
+  `example.com/#appshots-handoff=<stamp>` in its own group; the part after `#`
+  never leaves Chrome), never out of another session's group, and its native host
+  answers only that
   extension.
 - macOS gives the two permissions to the app as signed by this Mac's certificate.
   Every helper lives inside the app and is sealed into that signature, and each
@@ -98,7 +101,7 @@ Over 1 MB it's moved to `appshots.log.1`.
 | `…/Contents/MacOS/appshot-capture` (`src/capture`) | Reads a window's tree and screenshot |
 | `…/Contents/MacOS/appshot-chrome-host` (`src/chrome-host`) | Native host the Chrome bridge asks "which tabs were captured?" |
 | `src/shared/Signature.swift` | The signature check the app and agent run |
-| `chrome-extension/` | Chrome bridge: moves captured tabs into Claude's tab group |
+| `chrome-extension/` | Chrome bridge: moves a captured tab into the asking Claude session's tab group |
 | `skill/` → `~/.claude/skills/appshot` | How Claude reads and acts on an Appshot |
 | `claude-md-snippet.md` → `~/.claude/CLAUDE.md` | Tells every session to load the skill |
 
@@ -121,7 +124,9 @@ tests/run.sh --installed  # also the installed app's signature check and the new
 - **Copied instead of pasted:** a Code session's message box wasn't showing.
   `appshots.log` → `paste target … label=` shows what had focus, and
   `message box search:` how many boxes it found.
-- **Chrome tab not moved:** `appshots.log` → `chrome-bridge:` lines. No lines means
-  the extension isn't loaded in that profile or needs a reload;
+- **Chrome tab not moved:** `appshots.log` → `chrome-bridge: v<version>` lines (the
+  version shows which bridge Chrome is running; reload it after an update). No
+  line after the session asked means the extension isn't loaded in that profile
+  or needs a reload;
   `chrome-handoff: bridge not installed in Chrome profile dir=…` names the profile
   folder that is missing it.

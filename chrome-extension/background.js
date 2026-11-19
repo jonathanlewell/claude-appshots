@@ -1,17 +1,23 @@
 // Claude Appshots bridge.
 //
 // When Jonathan captures a Chrome tab with Claude Appshots, the Appshots agent
-// leaves a short note (URL, window title, time) that the native host hands
-// over on request (several captures can be waiting). Claude in Chrome can only control tabs inside its own tab
-// group, so as soon as a tab group is created, a tab joins one or a grouped tab
-// loads (which is what Claude in Chrome does when it starts work), this moves the captured tab
-// into that group. Claude then controls the real tab, as Codex Appshots does.
-// Every capture from the last 15 minutes is moved; each is used once. A tab
-// already in another Claude group stays where it is.
+// leaves a short note (URL, window title, time, capture stamp) that the native
+// host hands over on request. Claude in Chrome can only control tabs inside its
+// own session's tab group, so the session asks for the tab: it loads
+//   https://example.com/#appshots-handoff=<stamp>[,<stamp>…]
+// in a tab of its group (the stamp is the time in the Appshot's file names).
+// This moves those captured tabs into that tab's group. Claude then controls
+// the real tab, as Codex Appshots does. The part after # never leaves Chrome.
+//
+// Why a request and not the group's name: since Claude in Chrome 1.0.107 a
+// session's group is named after the session ("⌛Fix A+ content"), so names
+// can't tell Claude's groups from his own or one session from another
+// (seen 18–19 November 2026: tabs went to the wrong session, or nowhere).
 
 const HOST = "com.jonathanlewell.claude_appshots";
 const NONE = chrome.tabGroups.TAB_GROUP_ID_NONE;
-let busy = false;
+const VERSION = chrome.runtime.getManifest().version;
+const MARKER = /^https?:\/\/(www\.)?example\.com\/?#appshots-handoff=?([0-9TZ.,:-]*)$/;
 
 const norm = (u) => (u || "").replace(/^https?:\/\//, "").replace(/#.*$/, "").replace(/\/$/, "");
 
@@ -19,8 +25,27 @@ async function ask(msg) {
   try { return await chrome.runtime.sendNativeMessage(HOST, msg); }
   catch (e) { return null; }
 }
+const log = (msg) => ask({ cmd: "log", msg: `v${VERSION} ${msg}` });
 
-async function findCapturedTab(note, tabs) {
+// "2026-11-19T06-44-40.415Z" (as in the file names) → seconds since 1970.
+function stampTime(s) {
+  const t = Date.parse(s.replace(/T(\d\d)-(\d\d)-(\d\d)/, "T$1:$2:$3"));
+  return isNaN(t) ? null : t / 1000;
+}
+
+// The note for one stamp: an exact match, or (notes written before the agent
+// recorded stamps) the closest note written within 30 seconds after it.
+function noteFor(stamp, notes) {
+  const exact = notes.find((n) => n.stamp === stamp);
+  if (exact) return exact;
+  const t = stampTime(stamp);
+  if (t == null) return null;
+  const near = notes.filter((n) => !n.stamp && n.time - t > -5 && n.time - t < 30);
+  near.sort((a, b) => Math.abs(a.time - t) - Math.abs(b.time - t));
+  return near[0] || null;
+}
+
+function findCapturedTab(note, tabs) {
   const want = norm(note.url);
   let matches = want ? tabs.filter((t) => norm(t.url) === want) : [];
   if (!matches.length && note.windowTitle) {
@@ -31,58 +56,51 @@ async function findCapturedTab(note, tabs) {
   return matches[0];
 }
 
-// shortcut: matches the group's name; if tabs stop moving after a Claude
-// update, check what Claude in Chrome now calls its group.
-async function isClaudeGroup(groupId) {
-  if (groupId == null || groupId === NONE) return false;
-  try { return /claude/i.test((await chrome.tabGroups.get(groupId)).title || ""); }
-  catch (e) { return false; }
+// Groups that have asked for a tab are Claude sessions' groups. A captured tab
+// already in one of them stays there: another session is using it.
+async function sessionGroups() {
+  try { return (await chrome.storage.session.get("groups")).groups || []; } catch (e) { return []; }
+}
+async function rememberGroup(id) {
+  const g = await sessionGroups();
+  if (!g.includes(id)) { try { await chrome.storage.session.set({ groups: [...g, id].slice(-50) }); } catch (e) {} }
 }
 
-async function onGroupActivity(groupId) {
-  if (groupId == null || groupId === NONE || busy) return;
-  busy = true;
-  try {
-    // Only Claude in Chrome's group ("Claude …"), never one of his own.
-    if (!(await isClaudeGroup(groupId))) return;
-    const res = await ask({ cmd: "pending" });
-    const notes = (res && res.captures) || [];
-    if (!notes.length) return;
-    const tabs = await chrome.tabs.query({});
-    const handled = [];
-    for (const note of notes) {
-      const tab = await findCapturedTab(note, tabs);
-      if (!tab) { await ask({ cmd: "log", msg: "no open tab matches a captured page" }); continue; }
-      // Already in another Claude session's group: that session is using it
-      // (18 November 2026 a new session pulled a tab out of a working one).
-      // Leave it there and let the note go.
-      if (tab.groupId !== groupId && await isClaudeGroup(tab.groupId)) {
-        await ask({ cmd: "log", msg: "left a captured tab in another Claude group" });
-        handled.push(note.time);
-        continue;
-      }
-      if (tab.groupId !== groupId) await chrome.tabs.group({ groupId, tabIds: [tab.id] });
-      tab.groupId = groupId;
-      handled.push(note.time);
+async function handOff(groupId, stamps) {
+  if (groupId == null || groupId === NONE) { await log("handoff asked from a tab outside any group"); return; }
+  await rememberGroup(groupId);
+  const res = await ask({ cmd: "pending" });
+  const notes = (res && res.captures) || [];
+  // No stamp given: the newest capture only.
+  const wanted = stamps.length ? stamps.map((s) => noteFor(s, notes))
+    : notes.slice().sort((a, b) => b.time - a.time).slice(0, 1);
+  const tabs = await chrome.tabs.query({});
+  const others = (await sessionGroups()).filter((g) => g !== groupId);
+  const handled = [];
+  let moved = 0;
+  for (const note of wanted) {
+    if (!note) { await log("no waiting capture matches a requested stamp"); continue; }
+    const tab = findCapturedTab(note, tabs);
+    if (!tab) { await log("no open tab matches a captured page"); continue; }
+    if (tab.groupId !== groupId && others.includes(tab.groupId)) {
+      await log("left a captured tab in another Claude session's group");
+      continue;
     }
-    if (handled.length) await ask({ cmd: "done", times: handled });
-  } catch (e) {
-    await ask({ cmd: "log", msg: "could not move a tab: " + e });
-  } finally {
-    busy = false;
+    if (tab.groupId !== groupId) { await chrome.tabs.group({ groupId, tabIds: [tab.id] }); moved++; }
+    tab.groupId = groupId;
+    handled.push(note.time);
   }
+  if (handled.length) await ask({ cmd: "done", times: handled });
+  await log(`handoff: ${moved} moved, ${handled.length}/${wanted.length} requested captures now in the group`);
 }
 
-chrome.tabGroups.onCreated.addListener((g) => onGroupActivity(g.id));
-// A new group may only get its name a moment later.
-chrome.tabGroups.onUpdated.addListener((g) => onGroupActivity(g.id));
-chrome.tabs.onCreated.addListener((t) => { if (t.groupId !== NONE) onGroupActivity(t.groupId); });
-// A tab joining a group, or a grouped tab loading a placeholder (Claude waking
-// the bridge from a new tab or example.com), means a session wants the tab.
-// Ordinary page loads don't count: another session busy in its own group
-// would otherwise grab a capture meant for this one.
-const PLACEHOLDER = /^(chrome:\/\/newtab\/?|https?:\/\/(www\.)?example\.com\/?)$/;
+// One request at a time, none dropped.
+let chain = Promise.resolve();
 chrome.tabs.onUpdated.addListener((id, info, tab) => {
-  if ("groupId" in info) onGroupActivity(info.groupId);
-  else if (info.status === "loading" && PLACEHOLDER.test(info.url || tab.pendingUrl || tab.url || "")) onGroupActivity(tab.groupId);
+  // A full load reports the URL with status "loading"; a same-page # change
+  // reports only the URL. Both carry it in info.url.
+  const m = MARKER.exec(info.url || "");
+  if (!m) return;
+  const stamps = (m[2] || "").split(",").map((s) => s.trim()).filter(Boolean);
+  chain = chain.then(() => handOff(tab.groupId, stamps)).catch((e) => log("could not move a tab: " + e));
 });

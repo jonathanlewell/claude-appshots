@@ -50,5 +50,10 @@ check("no name with several profiles isn't guessed", ChromeBridge.status(windowT
 let flagged = CaptureResult(text: "<appshot app=\"Google Chrome\" url=\"x\">\nFocused: y\n</appshot>", image: nil, app: "", bundleID: "", windowTitle: "", url: nil, warnings: [])
     .adding(attribute: "chrome-bridge-missing-in-profile", "A \"B\" & <C>")
 check("flag goes on the appshot tag, escaped", flagged.text.hasPrefix("<appshot chrome-bridge-missing-in-profile=\"A &quot;B&quot; &amp; &lt;C&gt;\" app=\"Google Chrome\""))
+check("stamp from the tree file name", CaptureRunner.stamp(fromPath: "/x/captures/Google Chrome Appshot 2026-11-19T06-44-40.415Z.txt") == "2026-11-19T06-44-40.415Z")
+var stamped = capture("e.example"); stamped.stamp = "2026-11-19T06-44-40.415Z"
+ChromeHandoff.record(stamped)
+let notes = ((try? JSONSerialization.jsonObject(with: Data(contentsOf: ChromeHandoff.file))) as? [String: Any])?["captures"] as? [[String: Any]] ?? []
+check("note carries the stamp", notes.contains { ($0["stamp"] as? String) == "2026-11-19T06-44-40.415Z" && ($0["url"] as? String) == "e.example" })
 check("record reports a missing bridge", ChromeHandoff.record(CaptureResult(text: "", image: nil, app: "Google Chrome", bundleID: "com.google.Chrome", windowTitle: "d.example - Google Chrome – Bibiji · Claude", url: "d.example", warnings: []))?.installed == false)
 exit(failed == 0 ? 0 : 1)

@@ -59,15 +59,19 @@ He wants Claude to control **the tab he captured**, not a copy (confirmed
 7 November 2026). Never open a duplicate of the page unless he says to.
 
 The **Appshots Chrome bridge** (an extension he installs once, see the README)
-moves every tab captured in the last 15 minutes into Claude's group the moment a
-tab group is created, a tab joins one, or a grouped tab loads a placeholder (new
-tab or example.com). It never takes a tab out of another Claude group: that tab
-belongs to another session (since 18 November 2026, after a new session pulled
-one out of a working session). If he wants this session to have it, he drags it
-across (step 3).
-Its activity shows as `chrome-bridge:` lines in `~/.claude/appshots/appshots.log`.
-Chrome installs extensions per profile, so the bridge only works in profiles
-where he has loaded it.
+moves a captured tab into this session's group **only when this session asks**,
+by loading a handoff address in a tab of its group (step 2). It never goes by
+group names: Claude in Chrome names each session's group after the session
+("⌛Fix A+ content"), so names can't tell sessions apart (since 19 November 2026).
+It never takes a tab out of another session's group; if he wants this session to
+have it, he drags it across (step 3).
+Its activity shows as `chrome-bridge: v<version> …` lines in
+`~/.claude/appshots/appshots.log`. Chrome installs extensions per profile, so the
+bridge only works in profiles where he has loaded it.
+
+**The capture's stamp** is the time in its file names: for
+`image="Google Chrome Appshot 2026-11-19T06-44-40.415Z.png"` it is
+`2026-11-19T06-44-40.415Z`.
 
 **`chrome-bridge-missing-in-profile="<name>"` on the `<appshot>` tag** means the
 app checked and the bridge isn't installed (or is switched off) in the Chrome
@@ -81,15 +85,20 @@ onto the Claude group." Then call `tabs_context_mcp` again when he says so.
 
 1. Call `tabs_context_mcp` with `createIfEmpty: true`. If a tab in the group has
    the Appshot's URL, use it and skip to step 4.
-2. If the group already existed (nothing was created), wake the bridge: `navigate`
-   one of the group's placeholder tabs (New tab or example.com) to
-   `https://example.com` (`about:` and `data:` URLs are refused), or if there is
-   none, call `tabs_create_mcp` once. Then wait about 2 seconds (a
-   `computer` `wait` action) and call `tabs_context_mcp` again.
-3. Still not there? The bridge isn't installed or didn't match the page. Ask him:
-   "Right-click the tab you captured → Add tab to group → the Claude group (or
-   drag it onto that group's label), then tell me." If the group is in a new
-   window, say so. Then call `tabs_context_mcp` again.
+2. Ask the bridge for it: `navigate` one of the group's placeholder tabs (New tab
+   or an example.com page; if there is none, `tabs_create_mcp` once and use that)
+   to `https://example.com/#appshots-handoff=<stamp>`. For several Appshots
+   ("control these tabs"), join their stamps with commas. Only the part before
+   `#` reaches example.com. Then wait about 2 seconds (a `computer` `wait`
+   action) and call `tabs_context_mcp` again. Asking twice with the same address
+   does nothing; to retry, use a different placeholder tab.
+3. Still not there? Read the newest `chrome-bridge:` lines in the log: no line at
+   all means the bridge isn't loaded or reloaded in that profile; "another Claude
+   session's group" means another session has the tab; "no open tab matches"
+   means the page changed or was closed. Then ask him: "Right-click the tab you
+   captured → Add tab to group → <this group's name> (or drag it onto that group's
+   label), then tell me." The group carries this session's name. If it is in a
+   new window, say so. Then call `tabs_context_mcp` again.
 4. Take a screenshot of the tab and compare it with the Appshot's screenshot to
    confirm it's the same page, then do the work.
 
