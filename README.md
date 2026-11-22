@@ -2,7 +2,8 @@
 
 Codex Appshots for the Claude desktop app's Code tab. Double-tap **⌃ Control** on
 any window and a short `<appshot>` block plus a screenshot of that window lands in
-your open Claude Code session's message box. Claude then works in that window:
+your open Claude Code session's message box, or the chat or project thread showing
+in Claude. Claude then works in that window:
 Chrome tabs through Claude in Chrome (your actual tab, not a copy), other apps
 through computer use.
 
@@ -39,14 +40,16 @@ Remove: `~/.claude/appshots/uninstall.sh`.
 
 ## Use
 
-1. Have a Claude Code session open (its message box showing).
+1. Have a Claude Code session, chat or project thread open (its message box showing).
 2. In any app or Chrome tab, double-tap ⌃ Control (two quick taps, nothing else).
 3. Add your request and press Return. Nothing is ever sent for you.
 
 If a message in the conversation has focus, Appshots moves focus to the message box
-first. If Claude isn't showing a Code session's message box (or shows two, side by
-side), the Appshot is copied instead and a notification says so: click the box and
-press ⌘V.
+first. If Claude isn't showing a message box (or shows two, side by side), or the
+box is Quick Entry's, the Appshot is copied instead and a notification says so:
+click the box and press ⌘V.
+In a chat or project thread, Claude gets the screenshot and the Appshot text, but
+can't open the full Appshot file under `~/.claude`; that part needs a Code session.
 Capture several tabs, then say "control these tabs": the session asks the bridge
 for each of them and it moves them into that session's group.
 
@@ -121,8 +124,9 @@ tests/run.sh --installed  # also the installed app's signature check and the new
 - **No screenshot:** Screen Recording permission (see Install).
 - **"Its files changed since it was built":** something altered the app. Run
   `install.sh` to rebuild it.
-- **Copied instead of pasted:** a Code session's message box wasn't showing.
-  `appshots.log` → `paste target … label=` shows what had focus, and
+- **Copied instead of pasted:** no message box was showing.
+  `appshots.log` → `paste target … label= window=` shows what had focus (Code's
+  box is `Prompt`, a chat's `Write your reply to Claude`), and
   `message box search:` how many boxes it found.
 - **Chrome tab not moved:** `appshots.log` → `chrome-bridge: v<version>` lines (the
   version shows which bridge Chrome is running; reload it after an update). No

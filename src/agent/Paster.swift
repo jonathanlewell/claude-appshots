@@ -25,18 +25,20 @@ enum Paster {
         }
         Thread.sleep(forTimeInterval: 0.25)
 
-        // Only a Claude Code session's message box; a chat composer or Claude's
-        // own quick-entry box gets a copy instead. If focus is elsewhere in the
-        // window (say, a message he clicked), move it to the box first.
-        // shortcut: relies on Claude labelling that box "Prompt"; if pastes turn
-        // into copies after a Claude update, check "label=" in appshots.log.
+        // A Code session's message box, or the composer of the chat or project
+        // thread showing in Claude's main window. Claude's own quick-entry box
+        // gets a copy instead. If focus is elsewhere in the window (say, a
+        // message he clicked), move it to the box first.
+        // shortcut: relies on Claude's labels ("Prompt" in Code, "Write your
+        // reply/prompt to Claude" in chats); if pastes turn into copies after a
+        // Claude update, check "label=" in appshots.log.
         let pid = claude.processIdentifier
         var f = focusedField(pid)
-        log("paste target role=\(f.role ?? "nil") label=\(f.label ?? "")")
-        if !isPrompt(f), focusOnlyPrompt(pid) { f = focusedField(pid); log("moved focus to the message box") }
-        guard isPrompt(f) else {
+        log("paste target role=\(f.role ?? "nil") label=\(f.label ?? "") window=\(windowSubrole(pid) ?? "nil")")
+        if !isPrompt(f, pid), focusOnlyPrompt(pid) { f = focusedField(pid); log("moved focus to the message box") }
+        guard isPrompt(f, pid) else {
             setText(r.text, on: pb)
-            return .copiedOnly("Claude wasn't showing a Code session's message box")
+            return .copiedOnly("Claude wasn't showing a message box")
         }
 
         setText(r.text, on: pb, transient: true)
@@ -72,15 +74,36 @@ enum Paster {
         if transient { pb.setData(Data(), forType: transientType) }
     }
 
-    private static func isPrompt(_ f: (role: String?, label: String?)) -> Bool {
-        f.role == "AXTextArea" && f.label == "Prompt"
+    /// The Code tab's message box.
+    private static let codeLabel = "Prompt"
+    /// A chat's or project thread's composer: a new chat, then an existing one.
+    private static let chatLabels: Set<String> = ["Write your prompt to Claude", "Write your reply to Claude"]
+
+    /// Whether a label names a message box Appshots may paste into. Chat
+    /// composers count only in Claude's main window, so Quick Entry (a floating
+    /// panel) never gets the paste.
+    static func isPromptLabel(_ label: String?, windowSubrole: String?) -> Bool {
+        guard let label else { return false }
+        if label == codeLabel { return true }
+        return chatLabels.contains(label) && windowSubrole == "AXStandardWindow"
+    }
+
+    private static func isPrompt(_ f: (role: String?, label: String?), _ pid: pid_t) -> Bool {
+        f.role == "AXTextArea" && isPromptLabel(f.label, windowSubrole: windowSubrole(pid))
+    }
+
+    /// Subrole of Claude's focused window: AXStandardWindow for the main window.
+    private static func windowSubrole(_ pid: pid_t) -> String? {
+        let app = AXUIElementCreateApplication(pid)
+        guard let w = attr(app, kAXFocusedWindowAttribute) else { return nil }
+        return attr(w as! AXUIElement, kAXSubroleAttribute) as? String
     }
 
     /// ⌘V, only if Claude is still in front with the message box focused, so a
     /// window switch mid-paste can't send the Appshot to another app.
     private static func pasteIfStillThere(_ pid: pid_t) -> Bool {
         guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
-              isPrompt(focusedField(pid)) else { return false }
+              isPrompt(focusedField(pid), pid) else { return false }
         commandV()
         ourChange = NSPasteboard.general.changeCount
         return true
@@ -91,6 +114,7 @@ enum Paster {
     private static func focusOnlyPrompt(_ pid: pid_t) -> Bool {
         let app = AXUIElementCreateApplication(pid)
         guard let w = attr(app, kAXFocusedWindowAttribute) else { return false }
+        let subrole = attr(w as! AXUIElement, kAXSubroleAttribute) as? String
         // Breadth-first, one round trip per element, skipping the inside of
         // each message ("Message 12") so a long conversation stays quick.
         let names = [kAXRoleAttribute, kAXDescriptionAttribute, kAXTitleAttribute, kAXChildrenAttribute] as CFArray
@@ -102,7 +126,7 @@ enum Paster {
             guard AXUIElementCopyMultipleAttributeValues(el, names, AXCopyMultipleAttributeOptions(rawValue: 0), &vals) == .success,
                   let v = vals as? [AnyObject], v.count == 4 else { continue }
             if v[0] as? String == "AXTextArea" {
-                if v[1] as? String == "Prompt" || v[2] as? String == "Prompt" { found.append(el) }
+                if isPromptLabel(v[1] as? String, windowSubrole: subrole) || isPromptLabel(v[2] as? String, windowSubrole: subrole) { found.append(el) }
             } else if !((v[1] as? String)?.hasPrefix("Message ") ?? false), let kids = v[3] as? [AXUIElement] {
                 queue += kids
             }
