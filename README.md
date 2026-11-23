@@ -171,3 +171,7 @@ tests/run.sh --installed  # also the installed app's signature check and the new
   or needs a reload;
   `chrome-handoff: bridge not installed in Chrome profile dir=…` names the profile
   folder that is missing it.
+
+## Licence
+
+MIT: see [LICENSE](LICENSE).
