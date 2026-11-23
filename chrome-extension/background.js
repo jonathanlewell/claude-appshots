@@ -1,6 +1,6 @@
 // Claude Appshots bridge.
 //
-// When Jonathan captures a Chrome tab with Claude Appshots, the Appshots agent
+// When you capture a Chrome tab with Claude Appshots, the Appshots agent
 // leaves a short note (URL, window title, time, capture stamp) that the native
 // host hands over on request. Claude in Chrome can only control tabs inside its
 // own session's tab group, so the session asks for the tab: it loads
@@ -10,9 +10,9 @@
 // the real tab, as Codex Appshots does. The part after # never leaves Chrome.
 //
 // Why a request and not the group's name: since Claude in Chrome 1.0.107 a
-// session's group is named after the session ("⌛Fix A+ content"), so names
-// can't tell Claude's groups from his own or one session from another
-// (seen 18–19 November 2026: tabs went to the wrong session, or nowhere).
+// session's group is named after the session ("⌛Fix login page"), so names
+// can't tell Claude's groups from your own or one session from another
+// (tabs went to the wrong session, or nowhere).
 
 const HOST = "com.jonathanlewell.claude_appshots";
 const NONE = chrome.tabGroups.TAB_GROUP_ID_NONE;
@@ -51,7 +51,7 @@ function findCapturedTab(note, tabs) {
   if (!matches.length && note.windowTitle) {
     matches = tabs.filter((t) => t.title && note.windowTitle.startsWith(t.title + " - Google Chrome"));
   }
-  // Prefer the tab that was showing when he captured it: active, most recently used.
+  // Prefer the tab that was showing when it was captured: active, most recently used.
   matches.sort((a, b) => (b.active - a.active) || ((b.lastAccessed || 0) - (a.lastAccessed || 0)));
   return matches[0];
 }

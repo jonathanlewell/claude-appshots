@@ -1,5 +1,5 @@
 // Self-check for the Chrome bridge extension against a mocked Chrome. Run: tests/run.sh
-// Group names are deliberately session-style ("⌛Fix A+ content"): the bridge
+// Group names are deliberately session-style ("⌛Fix login page"): the bridge
 // must never depend on a group's name (Claude in Chrome 1.0.107 renames them).
 const src = require("fs").readFileSync(__dirname + "/../chrome-extension/background.js", "utf8");
 let onUpdated, grouped = [], done = [], queue = [], logs = [], store = {};
@@ -7,9 +7,9 @@ let tabs = [
   { id: 1, url: "https://github.com/x", title: "GitHub", active: false, groupId: -1, lastAccessed: 5 },
   { id: 2, url: "https://app.example.com/cal?a=1&b=2", title: "Calendar", active: true, groupId: -1, lastAccessed: 9 },
   { id: 3, url: "https://app.example.com/cal?a=1&b=2", title: "Calendar", active: false, groupId: -1, lastAccessed: 1 },
-  { id: 4, url: "chrome://newtab/", title: "New tab", active: true, groupId: 77, lastAccessed: 10 },   // session A: "⌛Fix A+ content"
-  { id: 5, url: "chrome://newtab/", title: "New tab", active: true, groupId: 66, lastAccessed: 10 },   // session B: "✅FBA inventory"
-  { id: 6, url: "https://mail.example/", title: "Mail", active: false, groupId: 88, lastAccessed: 3 }, // his own group "Work"
+  { id: 4, url: "chrome://newtab/", title: "New tab", active: true, groupId: 77, lastAccessed: 10 },   // session A: "⌛Fix login page"
+  { id: 5, url: "chrome://newtab/", title: "New tab", active: true, groupId: 66, lastAccessed: 10 },   // session B: "✅Weekly report"
+  { id: 6, url: "https://mail.example/", title: "Mail", active: false, groupId: 88, lastAccessed: 3 }, // the user's own group "Work"
 ];
 global.chrome = {
   tabGroups: { TAB_GROUP_ID_NONE: -1 },
@@ -55,7 +55,7 @@ const check = (name, ok) => { console.log((ok ? "ok   " : "FAIL ") + name); if (
   tabs.find((t) => t.id === 1).groupId = 88;
   await request(5, "https://example.com/#appshots-handoff=2026-11-19T06-44-14.747Z", { status: "loading" });
   check("a note without a stamp matches by time", grouped.join() === "1" && tabs.find((t) => t.id === 1).groupId === 66);
-  check("takes a tab from his own group", queue.length === 0);
+  check("takes a tab from the user's own group", queue.length === 0);
 
   reset();
   queue = [{ time: t0 + 100, stamp: "2026-11-19T06-45-54.000Z", url: "github.com/x", windowTitle: "" }];

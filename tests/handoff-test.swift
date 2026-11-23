@@ -28,7 +28,7 @@ let perms = (try? FileManager.default.attributesOfItem(atPath: ChromeHandoff.fil
 check("note is private", perms == 0o600)
 
 // Which profile a capture came from, and whether the bridge is installed there.
-check("profile from title", ChromeBridge.profileName(fromTitle: "Manage products - Google Chrome – Bibiji · Claude") == "Bibiji · Claude")
+check("profile from title", ChromeBridge.profileName(fromTitle: "Manage products - Google Chrome – Side project · Claude") == "Side project · Claude")
 check("no profile in a one-profile title", ChromeBridge.profileName(fromTitle: "Inbox - Google Chrome") == nil)
 check("page title mentioning Chrome", ChromeBridge.profileName(fromTitle: "Google Chrome tips - Google Chrome – Work") == "Work")
 let chrome = Paths.chrome
@@ -38,12 +38,12 @@ func writeJSON(_ o: Any, _ path: String) {
     try! JSONSerialization.data(withJSONObject: o).write(to: u)
 }
 let bridge = ["extensions": ["settings": [ChromeBridge.extensionID: ["path": "/x", "location": 4]]]]
-writeJSON(["profile": ["last_used": "Default", "info_cache": ["Default": ["name": "Home"], "Profile 30": ["name": "Bibiji · Claude"], "Profile 31": ["name": "Off"]]]], "Local State")
+writeJSON(["profile": ["last_used": "Default", "info_cache": ["Default": ["name": "Home"], "Profile 30": ["name": "Side project · Claude"], "Profile 31": ["name": "Off"]]]], "Local State")
 writeJSON(bridge, "Default/Preferences")
 writeJSON(["extensions": ["settings": ["someotherextensionid": [:]]]], "Profile 30/Preferences")
 writeJSON(["extensions": ["settings": [ChromeBridge.extensionID: ["path": "/x", "disable_reasons": [1]]]]], "Profile 31/Preferences")
 check("bridge found in its profile", ChromeBridge.status(windowTitle: "A - Google Chrome – Home") == .init(profileName: "Home", profileDir: "Default", installed: true))
-check("bridge missing in another profile", ChromeBridge.status(windowTitle: "A - Google Chrome – Bibiji · Claude") == .init(profileName: "Bibiji · Claude", profileDir: "Profile 30", installed: false))
+check("bridge missing in another profile", ChromeBridge.status(windowTitle: "A - Google Chrome – Side project · Claude") == .init(profileName: "Side project · Claude", profileDir: "Profile 30", installed: false))
 check("switched-off bridge counts as missing", ChromeBridge.status(windowTitle: "A - Google Chrome – Off")?.installed == false)
 check("unknown profile isn't guessed", ChromeBridge.status(windowTitle: "A - Google Chrome – Nobody") == nil)
 check("no name with several profiles isn't guessed", ChromeBridge.status(windowTitle: "A - Google Chrome") == nil)
@@ -55,5 +55,5 @@ var stamped = capture("e.example"); stamped.stamp = "2026-11-19T06-44-40.415Z"
 ChromeHandoff.record(stamped)
 let notes = ((try? JSONSerialization.jsonObject(with: Data(contentsOf: ChromeHandoff.file))) as? [String: Any])?["captures"] as? [[String: Any]] ?? []
 check("note carries the stamp", notes.contains { ($0["stamp"] as? String) == "2026-11-19T06-44-40.415Z" && ($0["url"] as? String) == "e.example" })
-check("record reports a missing bridge", ChromeHandoff.record(CaptureResult(text: "", image: nil, app: "Google Chrome", bundleID: "com.google.Chrome", windowTitle: "d.example - Google Chrome – Bibiji · Claude", url: "d.example", warnings: []))?.installed == false)
+check("record reports a missing bridge", ChromeHandoff.record(CaptureResult(text: "", image: nil, app: "Google Chrome", bundleID: "com.google.Chrome", windowTitle: "d.example - Google Chrome – Side project · Claude", url: "d.example", warnings: []))?.installed == false)
 exit(failed == 0 ? 0 : 1)

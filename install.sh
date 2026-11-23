@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Installs or updates Claude Appshots on this Mac. Safe to run again.
 #
-#   git clone <your repo> ~/.claude/appshots && ~/.claude/appshots/install.sh
+#   git clone https://github.com/jonathanlewell/claude-appshots.git ~/.claude/appshots && ~/.claude/appshots/install.sh
 set -euo pipefail
 BASE="$HOME/.claude/appshots"
 APP="$HOME/Applications/Claude Appshots.app"

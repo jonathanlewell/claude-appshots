@@ -1,32 +1,57 @@
 # Claude Appshots
 
-Codex Appshots for the Claude desktop app's Code tab. Double-tap **⌃ Control** on
+Show Claude any window on your Mac with one gesture. Double-tap **⌃ Control** on
 any window and a short `<appshot>` block plus a screenshot of that window lands in
-your open Claude Code session's message box, or the chat or project thread showing
-in Claude. Claude then works in that window:
-Chrome tabs through Claude in Chrome (your actual tab, not a copy), other apps
-through computer use.
+the message box of your open Claude Code session (in the Claude desktop app's Code
+tab), or of the chat or project thread showing in Claude. Claude then works in that
+window: Chrome tabs through Claude in Chrome (your actual tab, not a copy), other
+apps through computer use.
+
+It copies the idea of Appshots in OpenAI's Codex app, where a hotkey hands the
+assistant the window you're looking at. This is an independent project, not made
+or supported by Anthropic or OpenAI.
 
 ## Install (any Mac)
 
-Needs macOS 14+, Apple's command line tools (`xcode-select --install`), the Claude
-desktop app, and for Chrome, the Claude in Chrome extension.
+You need:
+
+- macOS 14 or later
+- Apple's command line tools: `xcode-select --install` (gives `swiftc`, `git` and
+  `python3`)
+- the Claude desktop app
+- for apps other than Chrome: computer use switched on in Claude
+- for Chrome: Google Chrome (not Beta or Canary) with the Claude in Chrome extension
 
 ```bash
-git clone <your private repo URL> ~/.claude/appshots
+git clone https://github.com/jonathanlewell/claude-appshots.git ~/.claude/appshots
 ~/.claude/appshots/install.sh
 ```
 
-It makes this Mac's own signing certificate (in your login keychain), then builds
-and signs the app. macOS asks for your login password to sign: click **Allow**,
-not Always Allow (see Security).
+The folder must be `~/.claude/appshots`: the installer stops if it's anywhere else.
+
+**What the installer changes on your Mac:**
+
+- makes a signing certificate called *Claude Appshots signing* in your login
+  keychain, used only to sign this app (its private key can't be exported)
+- builds `~/Applications/Claude Appshots.app` and starts it (a menu bar icon)
+- links the `appshot` skill into `~/.claude/skills/appshot`
+- adds a short *Appshots* section (`claude-md-snippet.md`) to the end of your
+  `~/.claude/CLAUDE.md`, which tells every Claude Code session to use the skill
+- registers the Chrome bridge's native host in Chrome's `NativeMessagingHosts` folder
+
+`uninstall.sh` undoes all of these except the CLAUDE.md section and the Chrome
+extension, which you remove by hand.
+
+While it builds, macOS asks for your login password to use the certificate: click
+**Allow**, not Always Allow (see Security). It asks again on every update.
 
 Then, once:
 
 1. **Permissions.** Allow *Claude Appshots* in System Settings → Privacy & Security →
    **Accessibility** and **Screen & System Audio Recording**. It asks on first run;
-   menu bar icon → Permissions… opens the right pane. If it's listed but still
-   refused, remove it with –, add it back with + (⌘⇧G, `~/Applications`).
+   menu bar icon → Permissions… opens the right pane. If macOS offers **Quit &
+   Reopen** after Screen Recording, click it. If it's listed but still refused,
+   remove it with –, add it back with + (⌘⇧G, `~/Applications`).
 2. **Chrome bridge.** `chrome://extensions` → Developer mode on → **Load unpacked** →
    `~/.claude/appshots/chrome-extension` (⌘⇧G in the picker; `.claude` is hidden).
    Chrome installs extensions per profile: do this in **every profile you capture
@@ -92,7 +117,7 @@ Over 1 MB it's moved to `appshots.log.1`.
   so nothing else can sign a look-alike. (Click Allow, never Always Allow: that
   would let any program sign with it silently.) Hardened runtime blocks code
   injection into all of them.
-- shortcut: a helper swapped in the split second between its check and its launch
+- Known gap: a helper swapped in the split second between its check and its launch
   would still run. Closing that means merging the helpers into one program.
 
 ## How it fits together
@@ -110,7 +135,19 @@ Over 1 MB it's moved to `appshots.log.1`.
 
 Rebuild with `./install.sh` after any change.
 
+## Limits
+
+- Pasting finds Claude's message box by its English labels (`Prompt`,
+  `Write your reply to Claude`). With Claude in another language, or after a
+  Claude update renames them, the Appshot is copied instead of pasted: press ⌘V.
+- The bridge works only in Google Chrome. Other browsers can be read from the
+  screenshot and tree, but Claude can't click in them.
+- Chat and project threads get the screenshot and the short block, but only a
+  Code session can open the full tree file.
+
 ## Tests
+
+Needs Node (`brew install node`) for the bridge check.
 
 ```bash
 tests/run.sh              # hotkey, Chrome note, bridge and host self-checks

@@ -138,9 +138,8 @@ enum ChromeHandoff {
 }
 
 /// The bridge is a Chrome extension, and Chrome installs extensions per
-/// profile: a tab captured in a profile without it is never moved (seen
-/// 9–18 November 2026, when every capture came from "Bibiji · Claude" and the
-/// bridge was only in Default). This works out the captured window's profile
+/// profile: a tab captured in a profile without it is never moved (for
+/// example, captures from a "Work" profile when the bridge is only in Default). This works out the captured window's profile
 /// from its title and checks that profile's own extension list.
 enum ChromeBridge {
     /// Fixed by the key in chrome-extension/manifest.json (install.sh derives it the same way).

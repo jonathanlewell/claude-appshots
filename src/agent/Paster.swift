@@ -28,8 +28,8 @@ enum Paster {
         // A Code session's message box, or the composer of the chat or project
         // thread showing in Claude's main window. Claude's own quick-entry box
         // gets a copy instead. If focus is elsewhere in the window (say, a
-        // message he clicked), move it to the box first.
-        // shortcut: relies on Claude's labels ("Prompt" in Code, "Write your
+        // message the user clicked), move it to the box first.
+        // Known gap: relies on Claude's labels ("Prompt" in Code, "Write your
         // reply/prompt to Claude" in chats); if pastes turn into copies after a
         // Claude update, check "label=" in appshots.log.
         let pid = claude.processIdentifier
@@ -58,7 +58,7 @@ enum Paster {
             if pasteIfStillThere(pid) { Thread.sleep(forTimeInterval: 0.7) }
         }
 
-        // Unless he copied something meanwhile, put his clipboard back.
+        // Unless the user copied something meanwhile, put their clipboard back.
         if pb.changeCount == ourChange { saved.restore(to: pb) }
         return .pasted
     }
@@ -110,7 +110,7 @@ enum Paster {
     }
 
     /// Focuses the message box in Claude's front window when there is exactly
-    /// one (with two sessions side by side, which one he meant is unknowable).
+    /// one (with two sessions side by side, which one the user meant is unknowable).
     private static func focusOnlyPrompt(_ pid: pid_t) -> Bool {
         let app = AXUIElementCreateApplication(pid)
         guard let w = attr(app, kAXFocusedWindowAttribute) else { return false }
