@@ -79,8 +79,10 @@ enum Paster {
     private static let codeLabel = "Prompt"
     /// A chat's or project thread's composer: a new chat, then an existing one.
     private static let chatLabels: Set<String> = ["Write your prompt to Claude", "Write your reply to Claude"]
-    /// A project's own chat composer (its placeholder; Claude writes "…" or "...").
-    private static let projectChatPrefix = "Ask Claude a question or start a task"
+    /// Placeholders of a project's own chat ("Ask Claude…") and of a project
+    /// thread while Claude is working in it ("Steer this thread…"); Claude
+    /// writes "…" or "...".
+    private static let placeholderPrefixes = ["Ask Claude a question or start a task", "Steer this thread"]
 
     /// Whether a label names a message box Appshots may paste into. Chat
     /// composers count only in Claude's main window, so Quick Entry (a floating
@@ -89,7 +91,7 @@ enum Paster {
         guard let label else { return false }
         if label == codeLabel { return true }
         guard windowSubrole == "AXStandardWindow" else { return false }
-        return chatLabels.contains(label) || label.hasPrefix(projectChatPrefix)
+        return chatLabels.contains(label) || placeholderPrefixes.contains { label.hasPrefix($0) }
     }
 
     private static func isPrompt(_ f: (role: String?, labels: [String]), _ pid: pid_t) -> Bool {
