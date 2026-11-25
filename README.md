@@ -3,7 +3,7 @@
 Show Claude any window on your Mac with one gesture. Double-tap **⌃ Control** on
 any window and a short `<appshot>` block plus a screenshot of that window lands in
 the message box of your open Claude Code session (in the Claude desktop app's Code
-tab), or of the chat or project thread showing in Claude. Claude then works in that
+tab), or of the chat, project chat or project thread showing in Claude. Claude then works in that
 window: Chrome tabs through Claude in Chrome (your actual tab, not a copy), other
 apps through computer use.
 
@@ -65,7 +65,7 @@ Remove: `~/.claude/appshots/uninstall.sh`.
 
 ## Use
 
-1. Have a Claude Code session, chat or project thread open (its message box showing).
+1. Have a Claude Code session, chat, project chat or project thread open (its message box showing).
 2. In any app or Chrome tab, double-tap ⌃ Control (two quick taps, nothing else).
 3. Add your request and press Return. Nothing is ever sent for you.
 

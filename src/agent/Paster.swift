@@ -30,11 +30,12 @@ enum Paster {
         // gets a copy instead. If focus is elsewhere in the window (say, a
         // message the user clicked), move it to the box first.
         // Known gap: relies on Claude's labels ("Prompt" in Code, "Write your
-        // reply/prompt to Claude" in chats); if pastes turn into copies after a
+        // reply/prompt to Claude" in chats, "Ask Claude a question or start a
+        // task…" in a project's own chat); if pastes turn into copies after a
         // Claude update, check "label=" in appshots.log.
         let pid = claude.processIdentifier
         var f = focusedField(pid)
-        log("paste target role=\(f.role ?? "nil") label=\(f.label ?? "") window=\(windowSubrole(pid) ?? "nil")")
+        log("paste target role=\(f.role ?? "nil") label=\(f.labels.joined(separator: " | ")) window=\(windowSubrole(pid) ?? "nil")")
         if !isPrompt(f, pid), focusOnlyPrompt(pid) { f = focusedField(pid); log("moved focus to the message box") }
         guard isPrompt(f, pid) else {
             setText(r.text, on: pb)
@@ -78,6 +79,10 @@ enum Paster {
     private static let codeLabel = "Prompt"
     /// A chat's or project thread's composer: a new chat, then an existing one.
     private static let chatLabels: Set<String> = ["Write your prompt to Claude", "Write your reply to Claude"]
+    /// Placeholders of a project's own chat ("Ask Claude…") and of a project
+    /// thread while Claude is working in it ("Steer this thread…"); Claude
+    /// writes "…" or "...".
+    private static let placeholderPrefixes = ["Ask Claude a question or start a task", "Steer this thread"]
 
     /// Whether a label names a message box Appshots may paste into. Chat
     /// composers count only in Claude's main window, so Quick Entry (a floating
@@ -85,11 +90,14 @@ enum Paster {
     static func isPromptLabel(_ label: String?, windowSubrole: String?) -> Bool {
         guard let label else { return false }
         if label == codeLabel { return true }
-        return chatLabels.contains(label) && windowSubrole == "AXStandardWindow"
+        guard windowSubrole == "AXStandardWindow" else { return false }
+        return chatLabels.contains(label) || placeholderPrefixes.contains { label.hasPrefix($0) }
     }
 
-    private static func isPrompt(_ f: (role: String?, label: String?), _ pid: pid_t) -> Bool {
-        f.role == "AXTextArea" && isPromptLabel(f.label, windowSubrole: windowSubrole(pid))
+    private static func isPrompt(_ f: (role: String?, labels: [String]), _ pid: pid_t) -> Bool {
+        guard f.role == "AXTextArea" else { return false }
+        let subrole = windowSubrole(pid)
+        return f.labels.contains { isPromptLabel($0, windowSubrole: subrole) }
     }
 
     /// Subrole of Claude's focused window: AXStandardWindow for the main window.
@@ -117,16 +125,16 @@ enum Paster {
         let subrole = attr(w as! AXUIElement, kAXSubroleAttribute) as? String
         // Breadth-first, one round trip per element, skipping the inside of
         // each message ("Message 12") so a long conversation stays quick.
-        let names = [kAXRoleAttribute, kAXDescriptionAttribute, kAXTitleAttribute, kAXChildrenAttribute] as CFArray
+        let names = [kAXRoleAttribute, kAXDescriptionAttribute, kAXTitleAttribute, kAXChildrenAttribute, kAXPlaceholderValueAttribute] as CFArray
         var queue = [w as! AXUIElement], found: [AXUIElement] = [], i = 0
         let deadline = Date().addingTimeInterval(1.5)
         while i < queue.count, i < 5_000, Date() < deadline {
             let el = queue[i]; i += 1
             var vals: CFArray?
             guard AXUIElementCopyMultipleAttributeValues(el, names, AXCopyMultipleAttributeOptions(rawValue: 0), &vals) == .success,
-                  let v = vals as? [AnyObject], v.count == 4 else { continue }
+                  let v = vals as? [AnyObject], v.count == 5 else { continue }
             if v[0] as? String == "AXTextArea" {
-                if isPromptLabel(v[1] as? String, windowSubrole: subrole) || isPromptLabel(v[2] as? String, windowSubrole: subrole) { found.append(el) }
+                if [v[1], v[2], v[4]].contains(where: { isPromptLabel($0 as? String, windowSubrole: subrole) }) { found.append(el) }
             } else if !((v[1] as? String)?.hasPrefix("Message ") ?? false), let kids = v[3] as? [AXUIElement] {
                 queue += kids
             }
@@ -159,8 +167,8 @@ enum Paster {
         return AXUIElementCopyAttributeValue(el, name as CFString, &v) == .success ? v : nil
     }
 
-    /// Role and label (title, else description) of Claude's focused element.
-    private static func focusedField(_ pid: pid_t) -> (role: String?, label: String?) {
+    /// Role and labels (title, description, placeholder) of Claude's focused element.
+    private static func focusedField(_ pid: pid_t) -> (role: String?, labels: [String]) {
         let app = AXUIElementCreateApplication(pid)
         // Electron only exposes its accessibility tree once asked.
         AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
@@ -168,13 +176,13 @@ enum Paster {
         for _ in 0..<3 {
             if let v = attr(app, kAXFocusedUIElementAttribute) {
                 let el = v as! AXUIElement
-                let title = attr(el, kAXTitleAttribute) as? String
-                let label = (title?.isEmpty == false) ? title : attr(el, kAXDescriptionAttribute) as? String
-                return (attr(el, kAXRoleAttribute) as? String, label)
+                let labels = [kAXTitleAttribute, kAXDescriptionAttribute, kAXPlaceholderValueAttribute]
+                    .compactMap { attr(el, $0) as? String }.filter { !$0.isEmpty }
+                return (attr(el, kAXRoleAttribute) as? String, labels)
             }
             Thread.sleep(forTimeInterval: 0.15)
         }
-        return (nil, nil)
+        return (nil, [])
     }
 
     private static func commandV() {
